@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="favWalletGrad" x1="10" y1="20" x2="90" y2="85" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#0072CE" />
+      <stop offset="50%" stopColor="#4F46E5" />
+      <stop offset="100%" stopColor="#7C3AED" />
+    </linearGradient>
+    <linearGradient id="favFlapGrad" x1="30" y1="35" x2="95" y2="75" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#38BDF8" />
+      <stop offset="100%" stopColor="#2563EB" />
+    </linearGradient>
+    <linearGradient id="favSparkGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stopColor="#FDE047" />
+      <stop offset="100%" stopColor="#F59E0B" />
+    </linearGradient>
+    <linearGradient id="favCardGrad" x1="15" y1="15" x2="85" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.9" />
+      <stop offset="100%" stopColor="#818CF8" stopOpacity="0.5" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Dark Rounded Container -->
+  <rect width="100" height="100" rx="24" fill="#090D16" />
+  <rect x="1" y="1" width="98" height="98" rx="23" stroke="#38BDF8" stroke-width="1.5" stroke-opacity="0.3" />
+
+  <!-- Smart Top Card -->
+  <path d="M24 22C24 17.58 27.58 14 32 14H74C78.42 14 82 17.58 82 22V30H24V22Z" fill="url(#favCardGrad)" />
+  <circle cx="70" cy="21" r="2.5" fill="#38BDF8" />
+
+  <!-- Wallet Body -->
+  <rect x="14" y="26" width="72" height="56" rx="12" fill="url(#favWalletGrad)" stroke="#38BDF8" stroke-width="1.5" stroke-opacity="0.4" />
+
+  <!-- Flow Wave Lines -->
+  <path d="M20 44C32 44 38 52 52 52C64 52 70 46 80 46" stroke="#67E8F9" stroke-width="2" stroke-dasharray="2 3" stroke-linecap="round" opacity="0.6" />
+  
+  <!-- Smart Wallet Flap -->
+  <path d="M48 38H84C86.76 38 89 40.24 89 43V65C89 67.76 86.76 70 84 70H48C42.48 70 38 65.52 38 60V48C38 42.48 42.48 38 48 38Z" fill="url(#favFlapGrad)" stroke="#93C5FD" stroke-width="1.5" />
+
+  <!-- AI Biometric Node with Spark -->
+  <circle cx="72" cy="54" r="7.5" fill="#0F172A" stroke="#38BDF8" stroke-width="2" />
+  <path d="M72 48C72 51.5 73.8 53 77 53C73.8 53 72 54.5 72 58C72 54.5 70.2 53 67 53C70.2 53 72 51.5 72 48Z" fill="url(#favSparkGrad)" />
+
+  <!-- AI Star sparkle -->
+  <path d="M86 14C86 16.5 87.5 17.5 90 17.5C87.5 17.5 86 18.5 86 21C86 18.5 84.5 17.5 82 17.5C84.5 17.5 86 16.5 86 14Z" fill="#38BDF8" />
+</svg>

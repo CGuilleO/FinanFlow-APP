@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "users": {
+      "fields": {
+        "email": { "type": "string", "required": true },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "userData": {
+      "fields": {
+        "userId": { "type": "string", "required": true },
+        "transactions": { "type": "array" },
+        "accounts": { "type": "array" },
+        "categories": { "type": "array" },
+        "bills": { "type": "array" },
+        "goals": { "type": "array" },
+        "settings": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  },
+  "security": {
+    "users": {
+      "read": "true",
+      "write": "true"
+    },
+    "userData": {
+      "read": "true",
+      "write": "true"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "FinanFlow | Insights Solutions SAS",
+  "description": "Control financiero personal y empresarial inteligente con IA, presupuestos, OCR y reportes. Un producto de Insights Solutions SAS (insights.com.co).",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
