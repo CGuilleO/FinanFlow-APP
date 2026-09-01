@@ -20,9 +20,34 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Use default Firestore instance
-export const db = getFirestore(app);
+// Database ID configured for this project
+export const FIRESTORE_DB_ID = 'ai-studio-finanflowinsight-57940131-7500-48b2-9226-2b1063c6630f';
+export const db = getFirestore(app, FIRESTORE_DB_ID);
 export const auth = getAuth(app);
+
+/**
+ * Utility to run any async promise with a max timeout to prevent infinite freezes
+ */
+export async function withTimeout<T>(promise: Promise<T>, ms: number = 2500, fallbackVal?: T): Promise<T> {
+  let timer: any;
+  const timeoutPromise = new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => {
+      if (fallbackVal !== undefined) {
+        resolve(fallbackVal);
+      } else {
+        reject(new Error(`Timeout de operación después de ${ms}ms`));
+      }
+    }, ms);
+  });
+
+  return Promise.race([
+    promise.then((res) => {
+      clearTimeout(timer);
+      return res;
+    }),
+    timeoutPromise
+  ]);
+}
 
 // Configure Google Auth Provider with Gmail Scopes
 export const googleProvider = new GoogleAuthProvider();
@@ -114,9 +139,10 @@ async function loadFullTransactions(cleanId: string, mainData: any): Promise<any
   if (mainData.chunkCount && mainData.chunkCount > 0) {
     try {
       const chunksCol = collection(db, 'userData', cleanId, 'chunks');
-      const chunksSnap = await getDocs(chunksCol);
+      const chunksSnap = await withTimeout(getDocs(chunksCol), 4000, null);
+      if (!chunksSnap) return mainData.transactions || [];
+
       const chunksMap = new Map<number, any[]>();
-      
       chunksSnap.forEach((chunkDoc) => {
         const cData = chunkDoc.data();
         if (cData && typeof cData.index === 'number' && Array.isArray(cData.items)) {
@@ -131,7 +157,7 @@ async function loadFullTransactions(cleanId: string, mainData: any): Promise<any
       }
       return fullTx;
     } catch (e) {
-      console.error('Error fetching transaction chunks:', e);
+      console.warn('Error fetching transaction chunks:', e);
       return mainData.transactions || [];
     }
   }
@@ -141,22 +167,31 @@ async function loadFullTransactions(cleanId: string, mainData: any): Promise<any
 // Subscribe to real-time updates for a user account
 export function subscribeToUserCloudData(userId: string, onData: (data: CloudUserData) => void) {
   if (!userId) return () => {};
-  const cleanId = normalizeUserId(userId);
-  const userDocRef = doc(db, 'userData', cleanId);
+  try {
+    const cleanId = normalizeUserId(userId);
+    const userDocRef = doc(db, 'userData', cleanId);
 
-  return onSnapshot(userDocRef, async (docSnap) => {
-    if (docSnap.exists()) {
-      const rawData = docSnap.data() as any;
-      const transactions = await loadFullTransactions(cleanId, rawData);
-      
-      onData({
-        ...rawData,
-        transactions,
-      });
-    }
-  }, (error) => {
-    console.error('Firestore sync error:', error);
-  });
+    return onSnapshot(userDocRef, async (docSnap) => {
+      try {
+        if (docSnap.exists()) {
+          const rawData = docSnap.data() as any;
+          const transactions = await loadFullTransactions(cleanId, rawData);
+          
+          onData({
+            ...rawData,
+            transactions,
+          });
+        }
+      } catch (err) {
+        console.warn('Error processing snapshot data:', err);
+      }
+    }, (error) => {
+      console.warn('Firestore sync snapshot notice:', error?.message || error);
+    });
+  } catch (err) {
+    console.warn('Could not initialize cloud listener:', err);
+    return () => {};
+  }
 }
 
 // Push local data to cloud (handles large sets of 2000+ transactions seamlessly)
@@ -198,10 +233,10 @@ export async function pushUserCloudData(userId: string, data: CloudUserData) {
         updatedByDevice: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Web / PC'
       }, { merge: true });
 
-      await batch.commit();
+      await withTimeout(batch.commit(), 5000);
     } else {
       // Normal size, store directly
-      await setDoc(userDocRef, {
+      await withTimeout(setDoc(userDocRef, {
         transactions,
         accounts: data.accounts || [],
         categories: data.categories || [],
@@ -212,13 +247,13 @@ export async function pushUserCloudData(userId: string, data: CloudUserData) {
         chunkCount: 0,
         updatedAt: new Date().toISOString(),
         updatedByDevice: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Web / PC'
-      }, { merge: true });
+      }, { merge: true }), 4000);
     }
 
     console.log(`Cloud sync successful: ${totalTransactions} transactions saved for user ${cleanId}`);
     return true;
   } catch (error) {
-    console.error('Error saving data to cloud:', error);
+    console.warn('Error saving data to cloud:', error);
     return false;
   }
 }
@@ -229,8 +264,8 @@ export async function fetchUserCloudData(userId: string): Promise<CloudUserData 
   try {
     const cleanId = normalizeUserId(userId);
     const userDocRef = doc(db, 'userData', cleanId);
-    const docSnap = await getDoc(userDocRef);
-    if (docSnap.exists()) {
+    const docSnap = await withTimeout(getDoc(userDocRef), 3000, null);
+    if (docSnap && docSnap.exists()) {
       const rawData = docSnap.data() as any;
       const transactions = await loadFullTransactions(cleanId, rawData);
       return {
@@ -240,7 +275,7 @@ export async function fetchUserCloudData(userId: string): Promise<CloudUserData 
     }
     return null;
   } catch (error) {
-    console.error('Error fetching data from cloud:', error);
+    console.warn('Notice fetching data from cloud:', error);
     return null;
   }
 }
