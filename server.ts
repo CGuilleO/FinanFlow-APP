@@ -397,6 +397,93 @@ Responde en español con tono profesional, claro y motivador en formato JSON.`;
   }
 });
 
+// 4. Analyze Email Invoices from Gmail with Gemini AI
+app.post("/api/gmail/analyze-invoices", async (req, res) => {
+  try {
+    const { emails = [], availableCategories = [], availableAccounts = [] } = req.body;
+
+    if (!Array.isArray(emails) || emails.length === 0) {
+      return res.status(400).json({ error: "No emails provided to analyze" });
+    }
+
+    const ai = getAIClient();
+
+    const prompt = `Eres un auditor financiero experto en facturación electrónica (DIAN, comprobantes de pago, recibos de servicios, compras de comercio, transferencias bancarias y recibos de suscripciones).
+Tu objetivo es analizar los siguientes correos electrónicos encontrados en la bandeja de entrada del usuario y extraer con absoluta precisión las facturas o cobros financieros reales.
+
+Categorías disponibles en la app: ${JSON.stringify(availableCategories)}
+Cuentas bancarias configuradas: ${JSON.stringify(availableAccounts)}
+
+Lista de correos a procesar:
+${JSON.stringify(emails, null, 2)}
+
+Instrucciones:
+1. Para CADA correo que contenga una factura electrónica, recibo de pago, cobro de servicios (luz, agua, gas, internet), factura de comercio (Éxito, Falabella, Amazon, MercadoLibre, Rappi, Uber, Didi, Netflix, Spotify, etc.) o transferencia bancaria (Bancolombia, Nequi, Daviplata, etc.):
+   - id: Id del correo original o un id único generado
+   - merchant: Nombre limpio del emisor o comercio (ej. "Empresas Públicas de Medellín E.S.P.", "Nequi", "Claro Colombia", "Uber", "Mercado Libre", "Éxito")
+   - totalAmount: Monto total a pagar o pagado como número positivo (ej. 145000)
+   - date: Fecha de la factura o transacción (formato YYYY-MM-DD).
+   - invoiceNumber: Número de factura electrónica o prefijo DIAN si existe (ej. "FE-12948", "REC-84920"), o null.
+   - type: "expense" (Gasto o factura pagada), "bill_reminder" (Factura pendiente por pagar o factura con fecha de vencimiento próxima), o "income" (Ingreso o comprobante de dinero recibido).
+   - dueDate: Fecha de vencimiento si es una factura por pagar (formato YYYY-MM-DD), o null.
+   - suggestedCategory: La categoría del usuario que mejor encaje (ej. "Servicios Públicos", "Alimentación", "Transporte", "Tecnología", etc.).
+   - suggestedAccount: La cuenta más adecuada (ej. "Bancolombia", "Nequi", "Daviplata", "Cuenta Nu", etc.) si se deduce del correo.
+   - confidenceScore: Nivel de certeza de 0 a 100.
+   - summary: Resumen explicativo de una sola línea (ej. "Factura electrónica por servicios de fibra óptica hogar").
+   - emailSubject: Asunto original del correo.
+   - emailDate: Fecha del correo.
+
+2. Si un correo NO contiene ningún movimiento financiero, factura ni recibo (por ejemplo spam o publicidad sin cobro), NO lo incluyas en la lista final.
+`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.7-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            detectedInvoices: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  merchant: { type: Type.STRING },
+                  totalAmount: { type: Type.NUMBER },
+                  date: { type: Type.STRING },
+                  dueDate: { type: Type.STRING },
+                  invoiceNumber: { type: Type.STRING },
+                  type: { type: Type.STRING, description: "expense, bill_reminder o income" },
+                  suggestedCategory: { type: Type.STRING },
+                  suggestedAccount: { type: Type.STRING },
+                  confidenceScore: { type: Type.NUMBER },
+                  summary: { type: Type.STRING },
+                  emailSubject: { type: Type.STRING },
+                  emailDate: { type: Type.STRING },
+                },
+                required: ["id", "merchant", "totalAmount", "date", "type", "suggestedCategory", "summary"],
+              },
+            },
+            totalFound: { type: Type.NUMBER },
+            scanSummary: { type: Type.STRING },
+          },
+          required: ["detectedInvoices"],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    res.json({ success: true, data: parsed });
+  } catch (error: any) {
+    console.error("Error analyzing invoices with Gemini:", error);
+    res.status(500).json({
+      error: error.message || "Error analizando las facturas electrónicas de Gmail con IA",
+    });
+  }
+});
+
 // Vite middleware for development / Static file serving for production
 async function setupViteOrStatic() {
   if (process.env.NODE_ENV !== "production") {

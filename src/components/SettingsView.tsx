@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Settings, Moon, Sun, DollarSign, Bell, Shield, Database, Trash2, CheckCircle2, RefreshCw, Smartphone, ExternalLink, Globe, AlertTriangle } from 'lucide-react';
+import { Settings, Moon, Sun, DollarSign, Bell, Shield, Database, Trash2, CheckCircle2, RefreshCw, Smartphone, ExternalLink, Globe, AlertTriangle, Mail, Sparkles } from 'lucide-react';
 import { UserSettings } from '../types';
 import { APP_VERSION, BUILD_DATE, APP_RELEASE_NAME } from '../version';
 import { saveStoredSettings, seedInitialData, clearAllTransactionsAndData, clearOnlyTransactions, syncCurrentDataToCloud } from '../utils/storage';
+import { getCachedGmailAccessToken } from '../lib/firebase';
 import { InsightsIcon, InsightsLogo } from './InsightsLogo';
 import confetti from 'canvas-confetti';
 
@@ -10,6 +11,7 @@ interface SettingsViewProps {
   settings: UserSettings;
   onUpdateSettings: (newSettings: UserSettings) => void;
   onRefreshAllData: () => void;
+  onOpenGmailScanner?: () => void;
 }
 
 const CURRENCIES = [
@@ -248,6 +250,51 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
             />
           </div>
+        </div>
+      </div>
+
+      {/* 2.1. Gmail & Electronic Invoices Integration */}
+      <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center">
+              <Mail className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Rastreador de Facturas y Recibos de Gmail
+                </h3>
+                <span className="px-2 py-0.5 text-[9px] font-black rounded bg-gradient-to-r from-red-500 to-indigo-600 text-white shadow-sm flex items-center gap-1">
+                  <Sparkles className="w-2.5 h-2.5" /> IA
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Sincroniza y detecta automáticamente facturas electrónicas (DIAN), servicios públicos (EPM, Enel, Claro) y compras.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+              <span className={`w-2.5 h-2.5 rounded-full ${getCachedGmailAccessToken() ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              <span>Estado: {getCachedGmailAccessToken() ? 'Conectado a Gmail' : 'Listo para escanear'}</span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Usa el botón para buscar tus comprobantes recientes sin ingresar datos manualmente.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onOpenGmailScanner}
+            className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all shrink-0"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            <span>Abrir Escáner de Gmail</span>
+          </button>
         </div>
       </div>
 

@@ -24,6 +24,7 @@ import {
   Trash2,
   RotateCcw,
   RefreshCw,
+  Mail,
 } from 'lucide-react';
 import { Account, BillReminder, Category, FinancialHealthAnalysis, Transaction, UserSettings, UserSession } from './types';
 import { APP_VERSION, BUILD_DATE } from './version';
@@ -62,6 +63,7 @@ import { VoiceInputModal } from './components/Modals/VoiceInputModal';
 import { SmartParserModal } from './components/Modals/SmartParserModal';
 import { TransactionModal } from './components/Modals/TransactionModal';
 import { ImportExportModal } from './components/Modals/ImportExportModal';
+import { GmailInvoiceScannerModal } from './components/Modals/GmailInvoiceScannerModal';
 import { ClipboardQuickDetector } from './components/ClipboardQuickDetector';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 
@@ -90,6 +92,7 @@ export default function App() {
   const [isSMSModalOpen, setIsSMSModalOpen] = useState(false);
   const [smsPrefilledText, setSmsPrefilledText] = useState<string>('');
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
 
@@ -354,14 +357,14 @@ export default function App() {
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2">
             Captura Inteligente IA
           </span>
-          <div className="grid grid-cols-3 gap-1.5 pt-1">
+          <div className="grid grid-cols-4 gap-1.5 pt-1">
             <button
               onClick={() => setIsOCRModalOpen(true)}
               title="Escanear ticket con cámara"
               className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/70 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 transition-all"
             >
               <Camera className="w-4 h-4" />
-              <span className="text-[10px] font-semibold">Ticket</span>
+              <span className="text-[9px] font-semibold truncate w-full text-center">Ticket</span>
             </button>
             <button
               onClick={() => setIsVoiceModalOpen(true)}
@@ -369,7 +372,7 @@ export default function App() {
               className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/70 hover:bg-rose-50 dark:hover:bg-rose-950 text-rose-600 dark:text-rose-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 transition-all"
             >
               <Mic className="w-4 h-4" />
-              <span className="text-[10px] font-semibold">Voz</span>
+              <span className="text-[9px] font-semibold truncate w-full text-center">Voz</span>
             </button>
             <button
               onClick={() => setIsSMSModalOpen(true)}
@@ -377,7 +380,15 @@ export default function App() {
               className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/70 hover:bg-cyan-50 dark:hover:bg-cyan-950 text-cyan-600 dark:text-cyan-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 transition-all"
             >
               <MessageSquare className="w-4 h-4" />
-              <span className="text-[10px] font-semibold">SMS</span>
+              <span className="text-[9px] font-semibold truncate w-full text-center">SMS</span>
+            </button>
+            <button
+              onClick={() => setIsGmailModalOpen(true)}
+              title="Rastrear facturas de Gmail"
+              className="p-2 rounded-xl bg-red-50/70 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 border border-red-200/80 dark:border-red-900/60 flex flex-col items-center justify-center gap-1 transition-all"
+            >
+              <Mail className="w-4 h-4" />
+              <span className="text-[9px] font-semibold truncate w-full text-center">Gmail</span>
             </button>
           </div>
         </div>
@@ -654,36 +665,46 @@ export default function App() {
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
                 Captura Rápida IA
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-1.5">
                 <button
                   onClick={() => {
                     setIsOCRModalOpen(true);
                     setMobileMenuOpen(false);
                   }}
-                  className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 text-center"
+                  className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 text-center"
                 >
                   <Camera className="w-4 h-4" />
-                  <span className="text-[10px] font-bold">Ticket OCR</span>
+                  <span className="text-[9px] font-bold truncate w-full">Ticket</span>
                 </button>
                 <button
                   onClick={() => {
                     setIsVoiceModalOpen(true);
                     setMobileMenuOpen(false);
                   }}
-                  className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-rose-50 dark:hover:bg-rose-950 text-rose-600 dark:text-rose-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 text-center"
+                  className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-rose-50 dark:hover:bg-rose-950 text-rose-600 dark:text-rose-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 text-center"
                 >
                   <Mic className="w-4 h-4" />
-                  <span className="text-[10px] font-bold">Dictar Voz</span>
+                  <span className="text-[9px] font-bold truncate w-full">Voz</span>
                 </button>
                 <button
                   onClick={() => {
                     setIsSMSModalOpen(true);
                     setMobileMenuOpen(false);
                   }}
-                  className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-cyan-50 dark:hover:bg-cyan-950 text-cyan-600 dark:text-cyan-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 text-center"
+                  className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-cyan-50 dark:hover:bg-cyan-950 text-cyan-600 dark:text-cyan-400 border border-slate-200 dark:border-slate-700/60 flex flex-col items-center justify-center gap-1 text-center"
                 >
                   <MessageSquare className="w-4 h-4" />
-                  <span className="text-[10px] font-bold">SMS / Texto</span>
+                  <span className="text-[9px] font-bold truncate w-full">SMS</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsGmailModalOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="p-2 rounded-xl bg-red-50/70 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 border border-red-200/80 dark:border-red-900/60 flex flex-col items-center justify-center gap-1 text-center"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span className="text-[9px] font-bold truncate w-full">Gmail</span>
                 </button>
               </div>
             </div>
@@ -872,6 +893,7 @@ export default function App() {
               onOpenOCR={() => setIsOCRModalOpen(true)}
               onOpenVoice={() => setIsVoiceModalOpen(true)}
               onOpenSMS={() => setIsSMSModalOpen(true)}
+              onOpenGmail={() => setIsGmailModalOpen(true)}
               onNavigateToTransactions={handleNavigateToTransactions}
               onNavigateToBudgets={() => setActiveTab('budgets')}
               onNavigateToBills={() => setActiveTab('bills')}
@@ -928,6 +950,7 @@ export default function App() {
               settings={settings}
               onUpdateSettings={(updated) => setSettings(updated)}
               onRefreshAllData={refreshAllData}
+              onOpenGmailScanner={() => setIsGmailModalOpen(true)}
             />
           )}
         </div>
@@ -1006,6 +1029,16 @@ export default function App() {
         settings={settings}
         aiAdvice={aiAdvice}
         onRefresh={refreshAllData}
+      />
+
+      {/* Gmail Invoice & Receipt AI Scanner Modal */}
+      <GmailInvoiceScannerModal
+        isOpen={isGmailModalOpen}
+        onClose={() => setIsGmailModalOpen(false)}
+        categories={categories}
+        accounts={accounts}
+        settings={settings}
+        onSuccess={refreshAllData}
       />
 
       {/* Auth Modal (Login / Register / Switch Account) */}

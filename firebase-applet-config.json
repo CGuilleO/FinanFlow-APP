@@ -1,12 +1,11 @@
 {
-  "projectId": "finanflow-507201",
-  "appId": "1:757122380255:web:ec1c52a7a295651618946a",
-  "apiKey": "AIzaSyCYQ35bpIL3aJLY4BTeW__AbWsqdAWuIJ8",
-  "authDomain": "finanflow-507201.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-finanflowinsight-57940131-7500-48b2-9226-2b1063c6630f",
-  "storageBucket": "finanflow-507201.firebasestorage.app",
-  "messagingSenderId": "757122380255",
+  "projectId": "gen-lang-client-0705492867",
+  "appId": "1:605478708901:web:add7621559570bbfaa4f4c",
+  "apiKey": "AIzaSyBV2FIzV1-boK6d2sFDkRsWBZwfsf0x_As",
+  "authDomain": "gen-lang-client-0705492867.firebaseapp.com",
+  "storageBucket": "gen-lang-client-0705492867.firebasestorage.app",
+  "messagingSenderId": "605478708901",
   "measurementId": "",
-  "oAuthClientId": "757122380255-hir9on30ell8uo89ti8h9of4t80jpab1.apps.googleusercontent.com",
+  "oAuthClientId": "605478708901-1ti160pvujhi09nhhhcj5etdqf9o0g13.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

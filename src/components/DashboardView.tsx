@@ -22,7 +22,8 @@ import {
   Filter,
   SlidersHorizontal,
   X,
-  Calendar
+  Calendar,
+  Mail
 } from 'lucide-react';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../types';
 import { formatCurrency, formatDate } from '../utils/storage';
@@ -41,6 +42,7 @@ interface DashboardViewProps {
   onOpenOCR: () => void;
   onOpenVoice: () => void;
   onOpenSMS: () => void;
+  onOpenGmail?: () => void;
   onNavigateToTransactions: (filterTag?: string) => void;
   onNavigateToBudgets: () => void;
   onNavigateToBills: () => void;
@@ -59,6 +61,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenOCR,
   onOpenVoice,
   onOpenSMS,
+  onOpenGmail,
   onNavigateToTransactions,
   onNavigateToBudgets,
   onNavigateToBills,
@@ -240,6 +243,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <MessageSquare className="w-4 h-4 text-cyan-300" />
               Billeteras / SMS
             </button>
+            {onOpenGmail && (
+              <button
+                onClick={onOpenGmail}
+                className="flex-1 sm:flex-none px-4 py-2.5 text-xs font-bold bg-white/15 hover:bg-white/25 text-white backdrop-blur-md border border-white/20 rounded-2xl flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <Mail className="w-4 h-4 text-red-300" />
+                Gmail Facturas
+              </button>
+            )}
             <button
               onClick={onOpenNewTransaction}
               className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl shadow-lg flex items-center justify-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"

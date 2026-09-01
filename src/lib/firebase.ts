@@ -9,12 +9,77 @@ import {
   getDocs,
   writeBatch 
 } from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  onAuthStateChanged, 
+  User 
+} from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Use the database ID specified in the firebase config
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
+export const auth = getAuth(app);
+
+// Configure Google Auth Provider with Gmail Scopes
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.readonly');
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
+
+// Cache the access token in memory (never localStorage)
+let cachedAccessToken: string | null = null;
+let isSigningIn = false;
+
+export const initGoogleAuthListener = (
+  onSuccess?: (user: User, token: string) => void,
+  onSignedOut?: () => void
+) => {
+  return onAuthStateChanged(auth, (user) => {
+    if (user && cachedAccessToken) {
+      if (onSuccess) onSuccess(user, cachedAccessToken);
+    } else {
+      cachedAccessToken = null;
+      if (onSignedOut) onSignedOut();
+    }
+  });
+};
+
+export const signInWithGoogleForGmail = async (): Promise<{ user: User; accessToken: string }> => {
+  try {
+    isSigningIn = true;
+    const result = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const token = credential?.accessToken;
+    if (!token) {
+      throw new Error('No se obtuvo el token de acceso de Google para Gmail.');
+    }
+    cachedAccessToken = token;
+    return { user: result.user, accessToken: token };
+  } catch (error) {
+    console.error('Error signing in with Google for Gmail:', error);
+    throw error;
+  } finally {
+    isSigningIn = false;
+  }
+};
+
+export const getCachedGmailAccessToken = (): string | null => {
+  return cachedAccessToken;
+};
+
+export const setCachedGmailAccessToken = (token: string | null) => {
+  cachedAccessToken = token;
+};
+
+export const signOutGoogle = async () => {
+  cachedAccessToken = null;
+  await auth.signOut();
+};
 
 export interface CloudUserData {
   transactions?: any[];
