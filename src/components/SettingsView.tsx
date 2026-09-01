@@ -29,6 +29,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   onUpdateSettings,
   onRefreshAllData,
+  onOpenGmailScanner,
 }) => {
   const [localSettings, setLocalSettings] = useState<UserSettings>(settings);
   const [savedSuccess, setSavedSuccess] = useState(false);

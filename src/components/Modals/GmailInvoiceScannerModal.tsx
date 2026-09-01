@@ -87,10 +87,15 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
       // Immediately start scan after successful Google sign in
       await startScan(result.accessToken);
     } catch (err: any) {
-      console.error('Error in Google Auth:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError('Ventana de autorización cerrada. Por favor intenta de nuevo.');
+      if (
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        err?.message?.includes('popup-closed-by-user')
+      ) {
+        // User closed popup or cancelled - no console.error needed, gentle hint in UI
+        setError('Inicio de sesión cancelado o ventana cerrada. Haz clic de nuevo cuando estés listo.');
       } else {
+        console.warn('Error in Google Auth:', err?.message || err);
         setError(err.message || 'No se pudo conectar con Gmail.');
       }
     } finally {
@@ -198,7 +203,6 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
           dueDate: item.dueDate || item.date,
           categoryId: catId,
           accountId: accId,
-          status: 'pending',
           isRecurring: false,
           reminderDaysBefore: 3,
           notes: `${item.summary} | Factura No: ${item.invoiceNumber || 'S/N'} (Importado de Gmail)`,

@@ -20,8 +20,8 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Use the database ID specified in the firebase config
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
+// Use default Firestore instance
+export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 // Configure Google Auth Provider with Gmail Scopes
@@ -60,8 +60,16 @@ export const signInWithGoogleForGmail = async (): Promise<{ user: User; accessTo
     }
     cachedAccessToken = token;
     return { user: result.user, accessToken: token };
-  } catch (error) {
-    console.error('Error signing in with Google for Gmail:', error);
+  } catch (error: any) {
+    if (
+      error?.code === 'auth/popup-closed-by-user' ||
+      error?.code === 'auth/cancelled-popup-request' ||
+      error?.message?.includes('popup-closed-by-user')
+    ) {
+      console.info('Ventana emergente de inicio de sesión de Google cerrada por el usuario.');
+    } else {
+      console.warn('Error signing in with Google for Gmail:', error?.message || error);
+    }
     throw error;
   } finally {
     isSigningIn = false;
