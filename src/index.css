@@ -2,3 +2,37 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Enforce a single clean vertical scroll and prevent any horizontal overflow across mobile and desktop */
+html {
+  overflow-x: hidden;
+  height: 100%;
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+}
+
+body {
+  overflow-x: hidden;
+  min-height: 100%;
+  width: 100%;
+  position: relative;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Ensure no child elements cause unexpected horizontal overflow on mobile screens */
+* {
+  box-sizing: border-box;
+}
+
+/* Ensure long words and numbers never break card margins on mobile */
+p, span, h1, h2, h3, h4, h5, h6, button, div {
+  overflow-wrap: break-word;
+}
+

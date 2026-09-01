@@ -82,6 +82,14 @@ function notifyListeners() {
   });
 }
 
+export function sortTransactionsDesc(txs: Transaction[]): Transaction[] {
+  return [...txs].sort((a, b) => {
+    const dateComp = (b.date || '').localeCompare(a.date || '');
+    if (dateComp !== 0) return dateComp;
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+}
+
 // 1. Transactions Storage
 export function getStoredTransactions(): Transaction[] {
   try {
@@ -96,7 +104,7 @@ export function getStoredTransactions(): Transaction[] {
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return sortTransactionsDesc(parsed);
       } catch {}
     }
 
@@ -120,9 +128,10 @@ export function getStoredTransactions(): Transaction[] {
         try {
           const parsed = JSON.parse(val);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            localStorage.setItem(currentKey, val);
+            const sorted = sortTransactionsDesc(parsed);
+            localStorage.setItem(currentKey, JSON.stringify(sorted));
             localStorage.setItem(getUserStorageKey(STORAGE_KEYS.INITIALIZED_FLAG), 'true');
-            return parsed;
+            return sorted;
           }
         } catch {}
       }
@@ -147,9 +156,10 @@ export function getStoredTransactions(): Transaction[] {
       }
     }
     if (bestRaw && maxLen > 0) {
-      localStorage.setItem(currentKey, bestRaw);
+      const sorted = sortTransactionsDesc(JSON.parse(bestRaw));
+      localStorage.setItem(currentKey, JSON.stringify(sorted));
       localStorage.setItem(getUserStorageKey(STORAGE_KEYS.INITIALIZED_FLAG), 'true');
-      return JSON.parse(bestRaw);
+      return sorted;
     }
 
     const initial = generateStarterTransactions();
@@ -165,7 +175,8 @@ export function getStoredTransactions(): Transaction[] {
 export function saveStoredTransactions(transactions: Transaction[], notify = true) {
   try {
     const key = getUserStorageKey(STORAGE_KEYS.TRANSACTIONS);
-    localStorage.setItem(key, JSON.stringify(transactions));
+    const sorted = sortTransactionsDesc(transactions);
+    localStorage.setItem(key, JSON.stringify(sorted));
     recalculateAccountBalances();
     if (notify) notifyListeners();
   } catch (e) {

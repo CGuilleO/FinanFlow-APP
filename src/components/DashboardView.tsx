@@ -1,5 +1,29 @@
-import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Wallet, PiggyBank, Sparkles, Camera, Mic, MessageSquare, Plus, AlertTriangle, Clock, ArrowUpRight, ArrowDownRight, Tag, ChevronRight, BarChart2, PieChart, Layers } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  PiggyBank,
+  Sparkles,
+  Camera,
+  Mic,
+  MessageSquare,
+  Plus,
+  AlertTriangle,
+  Clock,
+  ArrowUpRight,
+  ArrowDownRight,
+  Tag,
+  ChevronRight,
+  BarChart2,
+  PieChart,
+  Layers,
+  Search,
+  Filter,
+  SlidersHorizontal,
+  X,
+  Calendar
+} from 'lucide-react';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../types';
 import { formatCurrency, formatDate } from '../utils/storage';
 import { CategoryDonutChart, IncomeExpenseBarChart, WeeklySpendingChart } from './Charts/CustomCharts';
@@ -43,18 +67,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [drilldownType, setDrilldownType] = useState<DrilldownType | null>(null);
   const [selectedTxForDetail, setSelectedTxForDetail] = useState<Transaction | null>(null);
+  const [initialDrilldownCatId, setInitialDrilldownCatId] = useState<string | null>(null);
+  const [initialDrilldownAccId, setInitialDrilldownAccId] = useState<string | null>(null);
+
+  // In-place recent list filters
+  const [recentSearch, setRecentSearch] = useState('');
+  const [recentType, setRecentType] = useState<'all' | 'expense' | 'income' | 'transfer'>('all');
+  const [recentLimit, setRecentLimit] = useState<number | 'all'>(7);
 
   const today = new Date();
   const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
+  const categoryMap = useMemo(() => new Map<string, Category>(categories.map((c) => [c.id, c])), [categories]);
+  const accountMap = useMemo(() => new Map<string, Account>(accounts.map((a) => [a.id, a])), [accounts]);
+
+  // Ensure transactions are chronologically sorted (newest date first)
+  const sortedTransactions = useMemo(() => {
+    return [...transactions].sort((a, b) => {
+      const dateComp = (b.date || '').localeCompare(a.date || '');
+      if (dateComp !== 0) return dateComp;
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+  }, [transactions]);
+
   // Current month totals
-  const currentMonthTxs = transactions.filter((t) => t.date.startsWith(currentMonthKey));
-  const currentIncome = currentMonthTxs
-    .filter((t) => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
-  const currentExpense = currentMonthTxs
-    .filter((t) => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
+  const currentMonthTxs = useMemo(() => {
+    return sortedTransactions.filter((t) => t.date.startsWith(currentMonthKey));
+  }, [sortedTransactions, currentMonthKey]);
+
+  const currentIncome = useMemo(() => {
+    return currentMonthTxs
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [currentMonthTxs]);
+
+  const currentExpense = useMemo(() => {
+    return currentMonthTxs
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [currentMonthTxs]);
+
   const netSavings = currentIncome - currentExpense;
   const savingsRate = currentIncome > 0 ? Math.round((netSavings / currentIncome) * 100) : 0;
 
@@ -81,15 +133,40 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     .filter((c) => c.pct >= settings.budgetAlertThreshold);
 
   // Upcoming bills due in next 5 days or overdue
-  const todayStr = today.toISOString().split('T')[0];
   const upcomingBills = bills.filter((b) => {
     if (b.status === 'paid') return false;
     const diffDays = Math.ceil((new Date(b.dueDate).getTime() - today.getTime()) / (1000 * 3600 * 24));
     return diffDays <= 5;
   });
 
-  const categoryMap = new Map<string, Category>(categories.map((c) => [c.id, c]));
-  const accountMap = new Map<string, Account>(accounts.map((a) => [a.id, a]));
+  // Filtered recent transactions for in-place dashboard view
+  const filteredRecentTxs = useMemo(() => {
+    let list = sortedTransactions;
+    if (recentType !== 'all') {
+      list = list.filter((t) => t.type === recentType);
+    }
+    if (recentSearch.trim()) {
+      const q = recentSearch.toLowerCase();
+      list = list.filter((t) => {
+        const descMatch = t.description.toLowerCase().includes(q);
+        const catMatch = (categoryMap.get(t.categoryId)?.name || '').toLowerCase().includes(q);
+        const accMatch = (accountMap.get(t.accountId)?.name || '').toLowerCase().includes(q);
+        const tagMatch = t.tags?.some((tag) => tag.toLowerCase().includes(q));
+        const amountMatch = t.amount.toString().includes(q);
+        return descMatch || catMatch || accMatch || tagMatch || amountMatch;
+      });
+    }
+    if (recentLimit === 'all') {
+      return list;
+    }
+    return list.slice(0, recentLimit);
+  }, [sortedTransactions, recentType, recentSearch, recentLimit, categoryMap, accountMap]);
+
+  const openDrilldown = (type: DrilldownType, catId?: string, accId?: string) => {
+    setInitialDrilldownCatId(catId || null);
+    setInitialDrilldownAccId(accId || null);
+    setDrilldownType(type);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in pb-12">
@@ -424,27 +501,108 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <IncomeExpenseBarChart transactions={transactions} settings={settings} />
       </div>
 
-      {/* 6. Recent Transactions List */}
+      {/* 6. Recent Transactions List with In-Place Filters & Limit Control */}
       <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+        {/* Header with Title and Global Action */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-              Últimos Movimientos
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Toca cualquier movimiento para ver su comprobante, cuenta y detalles completos
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                Últimos Movimientos
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                {sortedTransactions.length} totales
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Toca cualquier movimiento o tarjeta para profundizar en comprobantes, cuentas y categorías
             </p>
           </div>
-          <button
-            onClick={() => onNavigateToTransactions()}
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-          >
-            Ver Todas ({transactions.length}) →
-          </button>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => onNavigateToTransactions()}
+              className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              Ver Todas ({transactions.length}) <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={onOpenNewTransaction}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> Nuevo
+            </button>
+          </div>
         </div>
 
+        {/* In-Place Quick Filter Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Buscar por concepto, comercio, tag o monto..."
+              value={recentSearch}
+              onChange={(e) => setRecentSearch(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            {recentSearch && (
+              <button
+                onClick={() => setRecentSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Type Filter Pills & Quantity Limit */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
+              {(['all', 'expense', 'income', 'transfer'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setRecentType(t)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                    recentType === t
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                  }`}
+                >
+                  {t === 'all' && 'Todos'}
+                  {t === 'expense' && 'Gastos'}
+                  {t === 'income' && 'Ingresos'}
+                  {t === 'transfer' && 'Transferencias'}
+                </button>
+              ))}
+            </div>
+
+            {/* Limit Selector */}
+            <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-[11px] hidden sm:inline">Mostrar:</span>
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
+                {([7, 15, 30, 'all'] as const).map((lim) => (
+                  <button
+                    key={String(lim)}
+                    onClick={() => setRecentLimit(lim)}
+                    className={`px-2 py-0.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                      recentLimit === lim
+                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                    }`}
+                  >
+                    {lim === 'all' ? 'Todas' : lim}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Transactions List */}
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
-          {transactions.length === 0 ? (
+          {sortedTransactions.length === 0 ? (
             <div className="py-8 text-center space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
                 <Plus className="w-6 h-6" />
@@ -454,7 +612,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Tu billetera está en limpio y lista
                 </p>
                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                  Aún no tienes movimientos registrados. Pulsa el botón "Manual", escanea un ticket o dicta por voz para ingresar tus datos reales.
+                  Aún no tienes movimientos registrados. Pulsa el botón "Nuevo", escanea un ticket o dicta por voz para ingresar tus datos reales.
                 </p>
               </div>
               <button
@@ -464,8 +622,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 + Registrar Primer Movimiento
               </button>
             </div>
+          ) : filteredRecentTxs.length === 0 ? (
+            <div className="py-8 text-center space-y-2">
+              <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                No se encontraron movimientos con los filtros aplicados
+              </p>
+              <button
+                onClick={() => {
+                  setRecentSearch('');
+                  setRecentType('all');
+                }}
+                className="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+              >
+                Limpiar filtros
+              </button>
+            </div>
           ) : (
-            transactions.slice(0, 7).map((tx) => {
+            filteredRecentTxs.map((tx) => {
               const cat = categoryMap.get(tx.categoryId);
               const acc = accountMap.get(tx.accountId);
               const isIncome = tx.type === 'income';
@@ -482,8 +655,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-white shadow-sm group-hover:scale-105 transition-transform"
+                      className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-white shadow-sm group-hover:scale-105 transition-transform cursor-pointer"
                       style={{ backgroundColor: cat?.color || '#64748B' }}
+                      title={`Ver categoría: ${cat?.name || 'General'}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDrilldown('category_distribution', tx.categoryId);
+                      }}
                     >
                       <IconRenderer name={cat?.icon || 'DollarSign'} className="w-5 h-5" />
                     </div>
@@ -499,14 +677,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                        <span>{formatDate(tx.date)}</span>
+                        <span className="font-medium text-slate-600 dark:text-slate-300">{formatDate(tx.date)}</span>
                         <span>•</span>
-                        <span>{cat?.name || 'General'}</span>
+                        <span
+                          className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDrilldown('category_distribution', tx.categoryId);
+                          }}
+                        >
+                          {cat?.name || 'General'}
+                        </span>
                         <span>•</span>
-                        <span>{acc?.name || 'Cuenta'}</span>
+                        <span
+                          className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDrilldown('net_worth', undefined, tx.accountId);
+                          }}
+                        >
+                          {acc?.name || 'Cuenta'}
+                        </span>
                       </div>
                       {tx.tags && tx.tags.length > 0 && (
-                        <div className="flex items-center gap-1 mt-1">
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
                           {tx.tags.map((tag) => (
                             <button
                               key={tag}
@@ -514,7 +708,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 e.stopPropagation();
                                 onNavigateToTransactions(tag);
                               }}
-                              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-500 hover:text-indigo-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md"
+                              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-500 hover:text-indigo-600 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md cursor-pointer"
                             >
                               <Tag className="w-2.5 h-2.5" />
                               {tag}
@@ -558,10 +752,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         onClose={() => {
           setDrilldownType(null);
           setSelectedTxForDetail(null);
+          setInitialDrilldownCatId(null);
+          setInitialDrilldownAccId(null);
         }}
         type={drilldownType}
+        initialCategoryId={initialDrilldownCatId}
+        initialAccountId={initialDrilldownAccId}
         selectedTransaction={selectedTxForDetail}
-        transactions={transactions}
+        transactions={sortedTransactions}
         categories={categories}
         accounts={accounts}
         bills={bills}

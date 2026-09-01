@@ -781,7 +781,7 @@ export default function App() {
       )}
 
       {/* 3. MAIN CONTENT VIEW */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+      <main className="flex-1 flex flex-col min-w-0 w-full md:h-screen md:overflow-y-auto overflow-x-hidden">
         {/* PWA Native Installation Bar */}
         <PWAInstallBanner />
 
@@ -843,7 +843,7 @@ export default function App() {
         </header>
 
         {/* View Content Area */}
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto overflow-x-hidden">
           {activeTab === 'dashboard' && (
             <DashboardView
               transactions={transactions}
