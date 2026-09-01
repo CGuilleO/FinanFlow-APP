@@ -77,6 +77,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const today = new Date();
   const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonthName = prevMonthDate.toLocaleDateString('es-ES', { month: 'short' });
 
   const categoryMap = useMemo(() => new Map<string, Category>(categories.map((c) => [c.id, c])), [categories]);
   const accountMap = useMemo(() => new Map<string, Account>(accounts.map((a) => [a.id, a])), [accounts]);
@@ -109,6 +112,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const netSavings = currentIncome - currentExpense;
   const savingsRate = currentIncome > 0 ? Math.round((netSavings / currentIncome) * 100) : 0;
+
+  // Previous month totals for visual comparison
+  const prevMonthTxs = useMemo(() => {
+    return sortedTransactions.filter((t) => t.date.startsWith(prevMonthKey));
+  }, [sortedTransactions, prevMonthKey]);
+
+  const prevIncome = useMemo(() => {
+    return prevMonthTxs
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [prevMonthTxs]);
+
+  const prevExpense = useMemo(() => {
+    return prevMonthTxs
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [prevMonthTxs]);
+
+  const prevNetSavings = prevIncome - prevExpense;
+  const prevSavingsRate = prevIncome > 0 ? Math.round((prevNetSavings / prevIncome) * 100) : 0;
+
+  // Differences vs previous month
+  const incomeChangePct = prevIncome > 0 ? Math.round(((currentIncome - prevIncome) / prevIncome) * 100) : null;
+  const expenseChangePct = prevExpense > 0 ? Math.round(((currentExpense - prevExpense) / prevExpense) * 100) : null;
+  const netSavingsDiff = netSavings - prevNetSavings;
 
   // Total net worth
   const totalNetWorth = accounts.reduce((sum, a) => sum + a.currentBalance, 0);
@@ -286,27 +314,50 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* 3. Executive Financial Metrics Cards (ALL INTERACTIVE WITH DRILLDOWNS) */}
+      {/* 3. Executive Financial Metrics Cards (ALL INTERACTIVE WITH DRILLDOWNS & COMPARISON) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Ingresos del Mes */}
         <div
-          onClick={() => setDrilldownType('income')}
-          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/60 dark:hover:border-emerald-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden"
+          onClick={() => openDrilldown('income')}
+          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/60 dark:hover:border-emerald-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between"
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-              Ingresos del Mes
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <ArrowUpRight className="w-4 h-4" />
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                Ingresos del Mes
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <ArrowUpRight className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              {formatCurrency(currentIncome, settings)}
+            </div>
+
+            {/* Visual comparison vs previous month */}
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              {incomeChangePct !== null ? (
+                <span
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold ${
+                    incomeChangePct >= 0
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
+                  }`}
+                >
+                  {incomeChangePct >= 0 ? '+' : ''}
+                  {incomeChangePct}%
+                </span>
+              ) : null}
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                vs {prevMonthName} ({formatCurrency(prevIncome, settings)})
+              </span>
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            {formatCurrency(currentIncome, settings)}
-          </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+
+          <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
             <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> Entradas registradas
+              <TrendingUp className="w-3 h-3" /> {currentMonthTxs.filter((t) => t.type === 'income').length} entradas
             </span>
             <span className="text-[10px] font-bold text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 flex items-center gap-0.5 transition-colors">
               Profundizar <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -316,21 +367,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Card 2: Gastos del Mes */}
         <div
-          onClick={() => setDrilldownType('expense')}
-          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-rose-500/60 dark:hover:border-rose-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden"
+          onClick={() => openDrilldown('expense')}
+          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-rose-500/60 dark:hover:border-rose-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between"
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
-              Gastos del Mes
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <ArrowDownRight className="w-4 h-4" />
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
+                Gastos del Mes
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <ArrowDownRight className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              {formatCurrency(currentExpense, settings)}
+            </div>
+
+            {/* Visual comparison vs previous month */}
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              {expenseChangePct !== null ? (
+                <span
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold ${
+                    expenseChangePct <= 0
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
+                  }`}
+                >
+                  {expenseChangePct >= 0 ? '+' : ''}
+                  {expenseChangePct}%
+                </span>
+              ) : null}
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                vs {prevMonthName} ({formatCurrency(prevExpense, settings)})
+              </span>
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            {formatCurrency(currentExpense, settings)}
-          </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+
+          <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
               {totalBudget > 0 ? `${budgetUsageRate}% presupuesto` : 'Sin límite fijado'}
             </span>
@@ -342,21 +416,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Card 3: Ahorro Neto */}
         <div
-          onClick={() => setDrilldownType('savings')}
-          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500/60 dark:hover:border-indigo-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden"
+          onClick={() => openDrilldown('savings')}
+          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500/60 dark:hover:border-indigo-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between"
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-              Ahorro Neto ({savingsRate}%)
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <PiggyBank className="w-4 h-4" />
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                Ahorro Neto ({savingsRate}%)
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <PiggyBank className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className={`text-xl sm:text-2xl font-black ${netSavings >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-600 dark:text-rose-400'}`}>
+              {formatCurrency(netSavings, settings)}
+            </div>
+
+            {/* Visual comparison vs previous month */}
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              <span
+                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold ${
+                  netSavingsDiff >= 0
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
+                }`}
+              >
+                {netSavingsDiff >= 0 ? '+' : ''}
+                {formatCurrency(netSavingsDiff, settings)}
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                vs {prevMonthName} ({formatCurrency(prevNetSavings, settings)})
+              </span>
             </div>
           </div>
-          <div className={`text-xl sm:text-2xl font-black ${netSavings >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-600 dark:text-rose-400'}`}>
-            {formatCurrency(netSavings, settings)}
-          </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+
+          <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
               {netSavings >= 0 ? 'Superávit disponible' : 'Déficit mensual'}
             </span>
@@ -368,21 +463,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Card 4: Patrimonio Neto / Cuentas */}
         <div
-          onClick={() => setDrilldownType('net_worth')}
-          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-cyan-500/60 dark:hover:border-cyan-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden"
+          onClick={() => openDrilldown('net_worth')}
+          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-cyan-500/60 dark:hover:border-cyan-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between"
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
-              Patrimonio en Cuentas
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Wallet className="w-4 h-4" />
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                Patrimonio en Cuentas
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Wallet className="w-4 h-4" />
+              </div>
+            </div>
+
+            <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              {formatCurrency(totalNetWorth, settings)}
+            </div>
+
+            {/* Liquidity description */}
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
+              Liquidez total disponible
             </div>
           </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-            {formatCurrency(totalNetWorth, settings)}
-          </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+
+          <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
             <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
               {accounts.length} cuentas activas
             </span>
