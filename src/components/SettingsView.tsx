@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Settings, Moon, Sun, DollarSign, Bell, Shield, Database, Trash2, CheckCircle2, RefreshCw, Smartphone, ExternalLink, Globe, AlertTriangle } from 'lucide-react';
 import { UserSettings } from '../types';
+import { APP_VERSION, BUILD_DATE, APP_RELEASE_NAME } from '../version';
 import { saveStoredSettings, seedInitialData, clearAllTransactionsAndData, clearOnlyTransactions, syncCurrentDataToCloud } from '../utils/storage';
 import { InsightsIcon, InsightsLogo } from './InsightsLogo';
 import confetti from 'canvas-confetti';
@@ -340,6 +341,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Cargar Demostración Inicial
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* System & Release Version Information */}
+      <div className="p-5 rounded-3xl bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-2xl bg-indigo-600/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black">
+            v
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-slate-900 dark:text-white">
+                FinanFlow AI
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-[11px] border border-indigo-200/60 dark:border-indigo-800/60">
+                {APP_VERSION}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              {APP_RELEASE_NAME} · Compilación: {BUILD_DATE}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] text-slate-400">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Sistema en Línea & Actualizado</span>
         </div>
       </div>
     </div>

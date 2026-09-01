@@ -26,6 +26,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { Account, BillReminder, Category, FinancialHealthAnalysis, Transaction, UserSettings, UserSession } from './types';
+import { APP_VERSION, BUILD_DATE } from './version';
 import { FinanFlowLogo } from './components/FinanFlowLogo';
 import { InsightsIcon, InsightsLogo, InsightsBadge } from './components/InsightsLogo';
 import { AuthModal } from './components/AuthModal';
@@ -488,9 +489,15 @@ export default function App() {
             </button>
           </div>
 
-          {/* Insights Solutions Attribution */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
+          {/* Insights Solutions Attribution & App Version */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5">
             <InsightsBadge />
+            <div className="flex items-center justify-between px-2 text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+              <span>Versión</span>
+              <span className="font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
+                {APP_VERSION}
+              </span>
+            </div>
           </div>
         </div>
       </aside>
@@ -507,6 +514,9 @@ export default function App() {
               </span>
               <span className="px-1 py-0.2 text-[8px] font-black uppercase bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded border border-indigo-200/80 dark:border-indigo-800">
                 AI
+              </span>
+              <span className="px-1 py-0.2 text-[8px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded">
+                {APP_VERSION}
               </span>
             </div>
             <span className="text-[9px] font-medium text-slate-400 dark:text-slate-400 whitespace-nowrap leading-tight">
@@ -794,6 +804,12 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* App Version Tag */}
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-mono font-bold text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700" title={`FinanFlow Build Date: ${BUILD_DATE}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>{APP_VERSION}</span>
+            </div>
+
             {/* Insights Solutions Corporate Tag */}
             <a
               href="https://insights.com.co"
