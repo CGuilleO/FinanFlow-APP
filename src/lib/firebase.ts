@@ -60,6 +60,65 @@ googleProvider.setCustomParameters({
 let cachedAccessToken: string | null = null;
 let isSigningIn = false;
 
+// Request token via Google Identity Services (GSI) OAuth 2.0 Token Client (bypasses Firebase authorized domain restrictions)
+export const requestGsiAccessToken = (scope: string = 'https://www.googleapis.com/auth/gmail.readonly'): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') {
+      return reject(new Error('Window no disponible'));
+    }
+
+    const clientId = firebaseConfig.oAuthClientId || '605478708901-1ti160pvujhi09nhhhcj5etdqf9o0g13.apps.googleusercontent.com';
+
+    const triggerClient = () => {
+      try {
+        const googleObj = (window as any).google;
+        if (!googleObj?.accounts?.oauth2) {
+          return reject(new Error('Google Identity Services no está disponible.'));
+        }
+
+        const client = googleObj.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: scope,
+          callback: (tokenResponse: any) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              resolve(tokenResponse.access_token);
+            } else if (tokenResponse && tokenResponse.error) {
+              const errMsg = tokenResponse.error_description || tokenResponse.error;
+              reject(new Error(errMsg));
+            } else {
+              reject(new Error('No se recibió token de acceso de Google.'));
+            }
+          },
+          error_callback: (error: any) => {
+            reject(new Error(error?.message || 'Error en la autorización de Google.'));
+          }
+        });
+
+        client.requestAccessToken({ prompt: 'consent' });
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    if ((window as any).google?.accounts?.oauth2) {
+      triggerClient();
+    } else {
+      // Dynamically load GSI script if not yet loaded
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setTimeout(triggerClient, 150);
+      };
+      script.onerror = () => {
+        reject(new Error('No se pudo cargar el script de Google Identity Services'));
+      };
+      document.head.appendChild(script);
+    }
+  });
+};
+
 export const initGoogleAuthListener = (
   onSuccess?: (user: User, token: string) => void,
   onSignedOut?: () => void
@@ -74,9 +133,45 @@ export const initGoogleAuthListener = (
   });
 };
 
-export const signInWithGoogleForGmail = async (): Promise<{ user: User; accessToken: string }> => {
+export const signInWithGoogleForGmail = async (): Promise<{ user?: Partial<User> | null; accessToken: string; email?: string }> => {
+  if (isSigningIn) {
+    throw new Error('Ya hay una solicitud de conexión en proceso.');
+  }
+
+  isSigningIn = true;
+
   try {
-    isSigningIn = true;
+    // Method 1: Try Google Identity Services (GSI) Token Client first (Works natively on custom domains)
+    try {
+      const gsiToken = await requestGsiAccessToken('https://www.googleapis.com/auth/gmail.readonly');
+      if (gsiToken) {
+        cachedAccessToken = gsiToken;
+
+        // Try to fetch user info with access token
+        let userEmail: string | undefined;
+        try {
+          const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${gsiToken}` }
+          });
+          if (userRes.ok) {
+            const uData = await userRes.json();
+            userEmail = uData.email;
+          }
+        } catch {
+          // Non-blocking
+        }
+
+        return {
+          user: { email: userEmail || 'usuario@gmail.com' } as any,
+          email: userEmail,
+          accessToken: gsiToken,
+        };
+      }
+    } catch (gsiErr: any) {
+      console.warn('GSI Token Client notice, attempting Firebase Auth fallback:', gsiErr?.message || gsiErr);
+    }
+
+    // Method 2: Fallback to Firebase Popup
     const result = await signInWithPopup(auth, googleProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const token = credential?.accessToken;
@@ -84,7 +179,7 @@ export const signInWithGoogleForGmail = async (): Promise<{ user: User; accessTo
       throw new Error('No se obtuvo el token de acceso de Google para Gmail.');
     }
     cachedAccessToken = token;
-    return { user: result.user, accessToken: token };
+    return { user: result.user, email: result.user.email || undefined, accessToken: token };
   } catch (error: any) {
     if (
       error?.code === 'auth/popup-closed-by-user' ||

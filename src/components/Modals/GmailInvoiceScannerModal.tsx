@@ -17,7 +17,12 @@ import {
   Clock,
   Building2,
   Receipt,
-  Tag
+  Tag,
+  Copy,
+  ExternalLink,
+  Key,
+  Check,
+  Globe
 } from 'lucide-react';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../../types';
 import { 
@@ -27,7 +32,9 @@ import {
 } from '../../utils/gmailInvoiceService';
 import { 
   signInWithGoogleForGmail, 
+  requestGsiAccessToken,
   getCachedGmailAccessToken, 
+  setCachedGmailAccessToken,
   signOutGoogle 
 } from '../../lib/firebase';
 import { addTransaction, addBill, formatCurrency } from '../../utils/storage';
@@ -60,6 +67,12 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
   const [error, setError] = useState<string | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const [daysBack, setDaysBack] = useState<number>(30);
+  const [showManualTokenInput, setShowManualTokenInput] = useState(false);
+  const [manualToken, setManualToken] = useState('');
+  const [copiedDomain, setCopiedDomain] = useState(false);
+
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'finanflow.insights.com.co';
+  const isUnauthorizedDomain = error?.toLowerCase().includes('unauthorized-domain') || error?.toLowerCase().includes('unauthorized domain');
 
   useEffect(() => {
     if (isOpen) {
@@ -72,10 +85,17 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
     } else {
       setError(null);
       setImportedCount(null);
+      setShowManualTokenInput(false);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const handleCopyDomain = () => {
+    navigator.clipboard.writeText(currentHost);
+    setCopiedDomain(true);
+    setTimeout(() => setCopiedDomain(false), 2500);
+  };
 
   const handleGoogleConnect = async () => {
     setIsAuthenticating(true);
@@ -83,7 +103,7 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
     try {
       const result = await signInWithGoogleForGmail();
       setToken(result.accessToken);
-      setUserEmail(result.user.email);
+      if (result.email) setUserEmail(result.email);
       // Immediately start scan after successful Google sign in
       await startScan(result.accessToken);
     } catch (err: any) {
@@ -92,7 +112,6 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
         err?.code === 'auth/cancelled-popup-request' ||
         err?.message?.includes('popup-closed-by-user')
       ) {
-        // User closed popup or cancelled - no console.error needed, gentle hint in UI
         setError('Inicio de sesión cancelado o ventana cerrada. Haz clic de nuevo cuando estés listo.');
       } else {
         console.warn('Error in Google Auth:', err?.message || err);
@@ -101,6 +120,148 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
     } finally {
       setIsAuthenticating(false);
     }
+  };
+
+  const handleDirectGsiConnect = async () => {
+    setIsAuthenticating(true);
+    setError(null);
+    try {
+      const gsiToken = await requestGsiAccessToken('https://www.googleapis.com/auth/gmail.readonly');
+      if (gsiToken) {
+        setToken(gsiToken);
+        setCachedGmailAccessToken(gsiToken);
+        await startScan(gsiToken);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'No se pudo autorizar con Google Identity Services.');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleManualTokenSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualToken.trim()) return;
+    const cleanToken = manualToken.trim();
+    setToken(cleanToken);
+    setCachedGmailAccessToken(cleanToken);
+    setError(null);
+    setShowManualTokenInput(false);
+    startScan(cleanToken);
+  };
+
+  const handleLoadDemoInvoices = () => {
+    setIsScanning(true);
+    setError(null);
+    setScanStep('searching');
+    setFoundEmailsCount(6);
+
+    setTimeout(() => {
+      setScanStep('analyzing');
+      setTimeout(() => {
+        const today = new Date();
+        const formatDate = (daysAgo: number) => {
+          const d = new Date();
+          d.setDate(today.getDate() - daysAgo);
+          return d.toISOString().split('T')[0];
+        };
+
+        const demoInvoices: DetectedInvoiceItem[] = [
+          {
+            id: 'inv_demo_dian_claro',
+            merchant: 'Claro Soluciones Móviles y Hogar',
+            totalAmount: 145900,
+            date: formatDate(3),
+            dueDate: formatDate(-10),
+            invoiceNumber: 'FE-839210',
+            type: 'bill_reminder',
+            suggestedCategory: 'Servicios',
+            suggestedAccount: accounts[0]?.name || 'Bancolombia Principal',
+            confidenceScore: 0.98,
+            summary: 'Factura electrónica mensual servicios de internet fibra óptica y telefonía móvil.',
+            emailSubject: 'Factura Electrónica de Venta No. FE-839210 - Comunicación Celular Comcel S.A.',
+            selected: true,
+          },
+          {
+            id: 'inv_demo_epm',
+            merchant: 'EPM Empresas Públicas de Medellín',
+            totalAmount: 289450,
+            date: formatDate(5),
+            dueDate: formatDate(-7),
+            invoiceNumber: 'ESP-491024',
+            type: 'bill_reminder',
+            suggestedCategory: 'Servicios',
+            suggestedAccount: accounts[0]?.name || 'Bancolombia Principal',
+            confidenceScore: 0.96,
+            summary: 'Cuenta de servicios públicos domiciliarios (Energía, Gas y Acueducto).',
+            emailSubject: 'Tu factura de servicios públicos EPM ya está lista para pago No. ESP-491024',
+            selected: true,
+          },
+          {
+            id: 'inv_demo_rappi',
+            merchant: 'Rappi Colombia S.A.S',
+            totalAmount: 54900,
+            date: formatDate(1),
+            invoiceNumber: 'RP-90214',
+            type: 'expense',
+            suggestedCategory: 'Alimentación',
+            suggestedAccount: accounts[1]?.name || accounts[0]?.name || 'Tarjeta de Crédito',
+            confidenceScore: 0.94,
+            summary: 'Comprobante de compra y entrega de restaurante a domicilio.',
+            emailSubject: 'Tu recibo de pedido en Rappi No. RP-90214',
+            selected: true,
+          },
+          {
+            id: 'inv_demo_uber',
+            merchant: 'Uber B.V. Colombia',
+            totalAmount: 23800,
+            date: formatDate(2),
+            invoiceNumber: 'UB-11029',
+            type: 'expense',
+            suggestedCategory: 'Transporte',
+            suggestedAccount: accounts[0]?.name || 'Nequi',
+            confidenceScore: 0.95,
+            summary: 'Recibo de viaje corporativo en la ciudad.',
+            emailSubject: 'Tu viaje con Uber del martes por la mañana',
+            selected: true,
+          },
+          {
+            id: 'inv_demo_enel',
+            merchant: 'Enel Colombia S.A. ESP',
+            totalAmount: 182300,
+            date: formatDate(8),
+            dueDate: formatDate(-12),
+            invoiceNumber: 'ENL-77189',
+            type: 'bill_reminder',
+            suggestedCategory: 'Servicios',
+            suggestedAccount: accounts[0]?.name || 'Bancolombia',
+            confidenceScore: 0.97,
+            summary: 'Factura electrónica de servicio de energía eléctrica.',
+            emailSubject: 'Factura Electrónica Enel Colombia - Cupón de pago ENL-77189',
+            selected: true,
+          },
+          {
+            id: 'inv_demo_banco',
+            merchant: 'Bancolombia Notificaciones',
+            totalAmount: 350000,
+            date: formatDate(4),
+            invoiceNumber: 'TRF-55829',
+            type: 'expense',
+            suggestedCategory: 'Gastos Fijos',
+            suggestedAccount: accounts[0]?.name || 'Bancolombia Principal',
+            confidenceScore: 0.93,
+            summary: 'Comprobante de transferencia bancaria por pago de arriendo / cuota.',
+            emailSubject: 'Comprobante de transferencia exitosa Bancolombia No. TRF-55829',
+            selected: true,
+          }
+        ];
+
+        setDetectedInvoices(demoInvoices);
+        setToken('demo_token');
+        setScanStep('done');
+        setIsScanning(false);
+      }, 1000);
+    }, 800);
   };
 
   const startScan = async (accessToken: string) => {
@@ -272,11 +433,62 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
           </button>
         </div>
 
-        {/* Error notification */}
+        {/* Error notification and Domain Resolution Helper */}
         {error && (
-          <div className="mt-4 p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="mt-4 p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 text-rose-800 dark:text-rose-200 text-xs space-y-3">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-bold">{error}</p>
+                {isUnauthorizedDomain && (
+                  <p className="mt-1 text-[11px] text-rose-700/90 dark:text-rose-300/90 leading-relaxed">
+                    Google y Firebase requieren registrar tu dominio personalizado para autorizar inicios de sesión emergentes.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {isUnauthorizedDomain && (
+              <div className="pt-2 border-t border-rose-200/70 dark:border-rose-900/60 space-y-2.5">
+                <div className="flex items-center justify-between p-2.5 bg-white/80 dark:bg-slate-900/80 rounded-xl border border-rose-200/50 dark:border-rose-900/40 text-[11px]">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <Globe className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span className="font-mono text-slate-700 dark:text-slate-200 truncate">{currentHost}</span>
+                  </div>
+                  <button
+                    onClick={handleCopyDomain}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 text-rose-800 dark:text-rose-200 text-[10px] font-bold transition-all"
+                  >
+                    {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedDomain ? 'Copiado' : 'Copiar Dominio'}</span>
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 pl-1">
+                  <p className="font-semibold text-slate-800 dark:text-slate-100">Pasos rápidos para habilitar en Firebase:</p>
+                  <p>1. Entra a Firebase Console &gt; <strong>Authentication</strong> &gt; Pestaña <strong>Settings</strong> &gt; <strong>Authorized Domains</strong>.</p>
+                  <p>2. Haz clic en <strong>Add Domain</strong> y pega: <code className="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono font-bold text-rose-600 dark:text-rose-400">{currentHost}</code>.</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    onClick={handleDirectGsiConnect}
+                    disabled={isAuthenticating}
+                    className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Conectar vía Google Identity Directo</span>
+                  </button>
+                  <button
+                    onClick={handleLoadDemoInvoices}
+                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  >
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>Probar Escáner con Facturas Demo</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -310,40 +522,94 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
               </div>
 
               {/* Official Google Sign-In button */}
-              <button
-                onClick={handleGoogleConnect}
-                disabled={isAuthenticating}
-                className="flex items-center justify-center gap-3 px-6 py-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 shadow-md hover:shadow-lg text-slate-700 dark:text-slate-100 font-semibold text-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-50"
-              >
-                {isAuthenticating ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
-                    <span>Conectando con Google...</span>
-                  </>
+              <div className="flex flex-col items-center gap-2.5 w-full max-w-sm">
+                <button
+                  onClick={handleGoogleConnect}
+                  disabled={isAuthenticating}
+                  className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 shadow-md hover:shadow-lg text-slate-700 dark:text-slate-100 font-semibold text-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-750 disabled:opacity-50 cursor-pointer"
+                >
+                  {isAuthenticating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+                      <span>Conectando con Google...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
+                      </svg>
+                      <span>Continuar con Google (Gmail)</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Instant alternative: Demo Scan */}
+                <button
+                  type="button"
+                  onClick={handleLoadDemoInvoices}
+                  className="w-full py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Probar Escáner IA con Facturas Demo (DIAN / Servicios)</span>
+                </button>
+              </div>
+
+              {/* Manual token collapsible */}
+              <div className="pt-1">
+                {!showManualTokenInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowManualTokenInput(true)}
+                    className="text-[11px] text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 underline transition-colors cursor-pointer"
+                  >
+                    ¿Deseas ingresar un Access Token manualmente?
+                  </button>
                 ) : (
-                  <>
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                      <path
-                        fill="#4285F4"
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                      />
-                      <path
-                        fill="#EA4335"
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                      />
-                    </svg>
-                    <span>Continuar con Google (Gmail)</span>
-                  </>
+                  <form onSubmit={handleManualTokenSubmit} className="w-full max-w-sm space-y-2 mt-2 text-left bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                      Google OAuth Access Token
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ya29.a0Ac..."
+                      value={manualToken}
+                      onChange={(e) => setManualToken(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg font-mono text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowManualTokenInput(false)}
+                        className="px-2.5 py-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!manualToken.trim()}
+                        className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-[11px] font-bold hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        Usar Token
+                      </button>
+                    </div>
+                  </form>
                 )}
-              </button>
+              </div>
 
               <div className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />

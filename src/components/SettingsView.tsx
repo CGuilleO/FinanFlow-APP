@@ -12,6 +12,8 @@ interface SettingsViewProps {
   onUpdateSettings: (newSettings: UserSettings) => void;
   onRefreshAllData: () => void;
   onOpenGmailScanner?: () => void;
+  onNavigateToPrivacy?: () => void;
+  onNavigateToTerms?: () => void;
 }
 
 const CURRENCIES = [
@@ -30,6 +32,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateSettings,
   onRefreshAllData,
   onOpenGmailScanner,
+  onNavigateToPrivacy,
+  onNavigateToTerms,
 }) => {
   const [localSettings, setLocalSettings] = useState<UserSettings>(settings);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -389,6 +393,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Cargar Demostración Inicial
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Legal, Privacy & Compliance */}
+      <div className="p-5 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-3">
+        <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+          <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          Términos Legales y Privacidad
+        </h3>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+          FinanFlow es un producto de Insights Solutions S.A.S. Tus datos financieros están protegidos bajo estrictos estándares de seguridad y confidencialidad.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onNavigateToPrivacy || (() => { window.location.pathname = '/privacy'; })}
+            className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 text-left flex items-center justify-between group transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  Política de Privacidad
+                </p>
+                <p className="text-[10px] text-slate-400">Protección de datos y Google API</p>
+              </div>
+            </div>
+            <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onNavigateToTerms || (() => { window.location.pathname = '/terms'; })}
+            className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 text-left flex items-center justify-between group transition-all cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                <Globe className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  Términos y Condiciones
+                </p>
+                <p className="text-[10px] text-slate-400">Condiciones de uso y licencias</p>
+              </div>
+            </div>
+            <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+          </button>
         </div>
       </div>
 

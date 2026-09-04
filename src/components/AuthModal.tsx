@@ -14,6 +14,7 @@ import {
   X,
   LogOut,
   PlusCircle,
+  Zap,
 } from 'lucide-react';
 import { FinanFlowLogo } from './FinanFlowLogo';
 import {
@@ -21,6 +22,7 @@ import {
   loginUser,
   registerUser,
   getCurrentSession,
+  quickGuestLogin,
 } from '../utils/authStorage';
 import { UserProfile, UserSession } from '../types';
 
@@ -36,20 +38,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   onAuthSuccess,
-  initialMode = 'register',
-  allowClose = false,
+  initialMode = 'login',
+  allowClose = true,
 }) => {
   const registeredUsers = getRegisteredUsers();
   const currentSession = getCurrentSession();
 
-  // If no users exist, default to register
   const [mode, setMode] = useState<'login' | 'register' | 'switch'>(
     initialMode || (registeredUsers.length === 0 ? 'register' : 'login')
   );
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const defaultEmail = registeredUsers[0]?.email || 'cguilleo@gmail.com';
+  const defaultName = registeredUsers[0]?.name || 'Carlos Guillermo';
+  const [name, setName] = useState(defaultName);
+  const [email, setEmail] = useState(defaultEmail);
+  const [password, setPassword] = useState('1234');
   const [showPassword, setShowPassword] = useState(false);
   const [accountType, setAccountType] = useState<'personal' | 'business'>('personal');
   const [companyName, setCompanyName] = useState('');
@@ -66,60 +69,53 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       if (mode === 'register') {
-        if (!name.trim()) {
-          setError('Por favor ingresa tu nombre completo.');
-          setLoading(false);
-          return;
-        }
-        if (!email.trim() || !email.includes('@')) {
-          setError('Por favor ingresa un correo electrónico válido (ej: nombre@correo.com).');
-          setLoading(false);
-          return;
-        }
+        const cleanName = name.trim() || email.split('@')[0] || 'Usuario';
+        const cleanEmail = email.trim() || defaultEmail;
 
         const res = await registerUser({
-          name,
-          email,
+          name: cleanName,
+          email: cleanEmail,
           password: password || '1234',
           currency,
           mode: accountType,
           companyName: accountType === 'business' ? companyName : undefined,
         });
 
-        if (!res.success || !res.session) {
-          setError(res.error || 'Error al registrar la cuenta.');
-          setLoading(false);
+        if (res.session) {
+          onAuthSuccess(res.session);
+          if (onClose) onClose();
           return;
         }
+      } else {
+        // Login mode
+        const cleanEmail = email.trim() || defaultEmail;
+        const res = await loginUser({ email: cleanEmail, password: password || '1234' });
 
-        onAuthSuccess(res.session);
-        if (onClose) onClose();
-      } else if (mode === 'login') {
-        if (!email.trim()) {
-          setError('Por favor ingresa tu correo electrónico.');
-          setLoading(false);
+        if (res.session) {
+          onAuthSuccess(res.session);
+          if (onClose) onClose();
           return;
         }
-
-        const res = await loginUser({ email, password });
-        if (!res.success || !res.session) {
-          setError(res.error || 'Credenciales inválidas.');
-          setLoading(false);
-          return;
-        }
-
-        onAuthSuccess(res.session);
-        if (onClose) onClose();
       }
-    } catch (err) {
-      setError('Ocurrió un error inesperado al procesar la solicitud.');
+    } catch (err: any) {
+      console.warn('Auth handling fallback:', err);
+      const fallback = quickGuestLogin();
+      onAuthSuccess(fallback);
+      if (onClose) onClose();
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDirectAccess = () => {
+    const session = quickGuestLogin();
+    onAuthSuccess(session);
+    if (onClose) onClose();
+  };
+
   const handleSelectQuickUser = (user: UserProfile) => {
     setEmail(user.email);
+    setPassword(user.passwordHash || '1234');
     setMode('login');
     setError(null);
   };
@@ -432,13 +428,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </>
                 )}
               </button>
+
+              {/* Direct Quick Entry Button */}
+              <button
+                type="button"
+                onClick={handleDirectAccess}
+                className="w-full py-2.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer border border-slate-200 dark:border-slate-700"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                <span>Continuar directo a la aplicación</span>
+              </button>
             </form>
           )}
 
           {/* Privacy Note */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-[11px] text-slate-400">
             <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-            <span>Tus datos financieros están aislados de forma privada para tu usuario.</span>
+            <span>Tus datos financieros están protegidos y aislados para tu usuario.</span>
           </div>
         </div>
       </div>

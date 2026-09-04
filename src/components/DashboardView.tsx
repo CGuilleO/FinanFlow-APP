@@ -23,7 +23,9 @@ import {
   SlidersHorizontal,
   X,
   Calendar,
-  Mail
+  Mail,
+  HandCoins,
+  Bell
 } from 'lucide-react';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../types';
 import { formatCurrency, formatDate } from '../utils/storage';
@@ -298,31 +300,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           ))}
 
-          {/* Upcoming bills alerts */}
-          {upcomingBills.map((bill) => (
-            <div
-              key={bill.id}
-              onClick={onNavigateToBills}
-              className="p-3.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:shadow-md"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-indigo-600 text-white">
-                  <Clock className="w-4 h-4" />
+          {/* Upcoming bills alerts & Loan payment alerts */}
+          {upcomingBills.map((bill) => {
+            const isLoan = bill.isLoanReminder;
+            return (
+              <div
+                key={bill.id}
+                onClick={onNavigateToBills}
+                className={`p-3.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:shadow-md ${
+                  isLoan
+                    ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200'
+                    : 'bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl text-white ${isLoan ? 'bg-amber-600' : 'bg-indigo-600'}`}>
+                    {isLoan ? <HandCoins className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold flex items-center gap-1.5">
+                      {isLoan ? (
+                        <>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 text-[10px] uppercase font-black">
+                            Alerta Préstamo (1 día antes)
+                          </span>
+                          {bill.title}
+                        </>
+                      ) : (
+                        `Recordatorio de Factura Próxima: ${bill.title}`
+                      )}
+                    </h4>
+                    <p className="text-[11px] opacity-85">
+                      Vencimiento: <strong>{formatDate(bill.dueDate)}</strong> • Total a Pagar: <strong>{formatCurrency(bill.amount, settings)}</strong>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold">
-                    Recordatorio de Factura Próxima: {bill.title}
-                  </h4>
-                  <p className="text-[11px] opacity-80">
-                    Vencimiento: {formatDate(bill.dueDate)} • Monto: <strong>{formatCurrency(bill.amount, settings)}</strong>
-                  </p>
-                </div>
+                <span
+                  className={`text-xs font-bold px-2.5 py-1 rounded-xl shadow-sm ${
+                    isLoan
+                      ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200'
+                      : 'bg-white/80 dark:bg-slate-900/80 text-indigo-700 dark:text-indigo-300'
+                  }`}
+                >
+                  {isLoan ? 'Ver Préstamo →' : 'Pagar Factura →'}
+                </span>
               </div>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-white/80 dark:bg-slate-900/80 text-indigo-700 dark:text-indigo-300 shadow-sm">
-                Pagar Factura →
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

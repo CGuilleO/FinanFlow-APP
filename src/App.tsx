@@ -56,6 +56,8 @@ import { BudgetsCategoriesView } from './components/BudgetsCategoriesView';
 import { BillsRemindersView } from './components/BillsRemindersView';
 import { AIAdvisorView } from './components/AIAdvisorView';
 import { SettingsView } from './components/SettingsView';
+import { PrivacyPolicyView } from './components/Legal/PrivacyPolicyView';
+import { TermsOfServiceView } from './components/Legal/TermsOfServiceView';
 
 // Modals
 import { OCRScannerModal } from './components/Modals/OCRScannerModal';
@@ -68,6 +70,50 @@ import { ClipboardQuickDetector } from './components/ClipboardQuickDetector';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 
 export default function App() {
+  // Public Route State (for Privacy Policy, Terms of Service, or Main App)
+  const [currentRoute, setCurrentRoute] = useState<'app' | 'privacy' | 'terms'>(() => {
+    if (typeof window === 'undefined') return 'app';
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (path.startsWith('/privacy') || path.startsWith('/privacidad') || hash.includes('privacy') || hash.includes('privacidad')) {
+      return 'privacy';
+    }
+    if (path.startsWith('/terms') || path.startsWith('/terminos') || hash.includes('terms') || hash.includes('terminos')) {
+      return 'terms';
+    }
+    return 'app';
+  });
+
+  const navigateTo = (route: 'app' | 'privacy' | 'terms') => {
+    setCurrentRoute(route);
+    if (typeof window !== 'undefined') {
+      const targetPath = route === 'app' ? '/' : `/${route}`;
+      window.history.pushState({}, '', targetPath);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path.startsWith('/privacy') || path.startsWith('/privacidad') || hash.includes('privacy') || hash.includes('privacidad')) {
+        setCurrentRoute('privacy');
+      } else if (path.startsWith('/terms') || path.startsWith('/terminos') || hash.includes('terms') || hash.includes('terminos')) {
+        setCurrentRoute('terms');
+      } else {
+        setCurrentRoute('app');
+      }
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, []);
+
   // Navigation State
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'budgets' | 'bills' | 'advisor' | 'settings'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -316,6 +362,24 @@ export default function App() {
     { id: 'settings', label: 'Configuración', icon: SettingsIcon },
   ];
 
+  if (currentRoute === 'privacy') {
+    return (
+      <PrivacyPolicyView
+        onBack={() => navigateTo('app')}
+        onNavigateToTerms={() => navigateTo('terms')}
+      />
+    );
+  }
+
+  if (currentRoute === 'terms') {
+    return (
+      <TermsOfServiceView
+        onBack={() => navigateTo('app')}
+        onNavigateToPrivacy={() => navigateTo('privacy')}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100/60 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row transition-colors">
       {/* 1. DESKTOP SIDEBAR */}
@@ -500,9 +564,26 @@ export default function App() {
             </button>
           </div>
 
-          {/* Insights Solutions Attribution & App Version */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5">
+          {/* Insights Solutions Attribution, Legal Links & App Version */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
             <InsightsBadge />
+            <div className="flex items-center justify-center gap-2 text-[10px] text-slate-400 dark:text-slate-500">
+              <button
+                type="button"
+                onClick={() => navigateTo('privacy')}
+                className="hover:text-indigo-600 dark:hover:text-indigo-400 underline transition-colors cursor-pointer"
+              >
+                Privacidad
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                onClick={() => navigateTo('terms')}
+                className="hover:text-indigo-600 dark:hover:text-indigo-400 underline transition-colors cursor-pointer"
+              >
+                Términos
+              </button>
+            </div>
             <div className="flex items-center justify-between px-2 text-[10px] text-slate-400 dark:text-slate-500 font-medium">
               <span>Versión</span>
               <span className="font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
@@ -795,12 +876,35 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="pt-2 text-center border-t border-slate-100 dark:border-slate-800/80">
+              <div className="pt-2 text-center border-t border-slate-100 dark:border-slate-800/80 space-y-1.5">
+                <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      navigateTo('privacy');
+                    }}
+                    className="hover:text-indigo-600 dark:hover:text-indigo-400 underline transition-colors cursor-pointer"
+                  >
+                    Privacidad
+                  </button>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      navigateTo('terms');
+                    }}
+                    className="hover:text-indigo-600 dark:hover:text-indigo-400 underline transition-colors cursor-pointer"
+                  >
+                    Términos
+                  </button>
+                </div>
                 <a
                   href="https://insights.com.co"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] font-semibold text-[#0072CE] dark:text-[#38a3f8] hover:underline"
+                  className="block text-[11px] font-semibold text-[#0072CE] dark:text-[#38a3f8] hover:underline"
                 >
                   Insights Solutions SAS • insights.com.co ↗
                 </a>

@@ -18,7 +18,10 @@ import {
   CreditCard,
   Upload,
   FileSpreadsheet,
-  AlertTriangle
+  AlertTriangle,
+  HandCoins,
+  Bell,
+  Clock
 } from 'lucide-react';
 import { Account, Category, Transaction, UserSettings } from '../types';
 import { deleteTransaction, formatCurrency, formatDate, clearOnlyTransactions, syncCurrentDataToCloud } from '../utils/storage';
@@ -461,6 +464,54 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                               #{tag}
                             </button>
                           ))}
+                        </div>
+                      )}
+
+                      {/* Loan Income Breakdown Badge and Values */}
+                      {tx.isLoanIncome && tx.loanDetails && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/80 space-y-1.5 w-full">
+                          <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+                            <div className="flex items-center gap-1 font-bold text-indigo-700 dark:text-indigo-300">
+                              <HandCoins className="w-3.5 h-3.5" />
+                              <span>Préstamo Ingresado</span>
+                              {tx.loanDetails.lenderOrBorrower && (
+                                <span className="font-normal text-slate-500 text-[11px]">
+                                  • {tx.loanDetails.lenderOrBorrower}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                              <Clock className="w-3 h-3 text-indigo-500" />
+                              <span>Vencimiento: <strong>{formatDate(tx.loanDetails.paymentDueDate)}</strong></span>
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-semibold">
+                                <Bell className="w-2.5 h-2.5" /> Aviso 1 día antes
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Specific values format requested by user: prestado, interes cuota, total a pagar */}
+                          <div className="grid grid-cols-3 gap-1.5 text-center pt-1 border-t border-indigo-100 dark:border-indigo-900/50">
+                            <div className="bg-white/80 dark:bg-slate-900/80 p-1.5 rounded-lg border border-slate-200/70 dark:border-slate-800">
+                              <span className="block text-[9px] uppercase font-bold text-slate-400">Prestado</span>
+                              <span className="text-xs font-black text-slate-900 dark:text-white">
+                                {formatCurrency(tx.loanDetails.principalAmount || tx.amount, settings)}
+                              </span>
+                            </div>
+
+                            <div className="bg-white/80 dark:bg-slate-900/80 p-1.5 rounded-lg border border-amber-200/70 dark:border-amber-900/50">
+                              <span className="block text-[9px] uppercase font-bold text-amber-600 dark:text-amber-400">Interés Cuota</span>
+                              <span className="text-xs font-black text-amber-700 dark:text-amber-300">
+                                {formatCurrency(tx.loanDetails.installmentInterestAmount ?? tx.loanDetails.interestAmount, settings)}
+                              </span>
+                            </div>
+
+                            <div className="bg-white/80 dark:bg-slate-900/80 p-1.5 rounded-lg border border-rose-200/70 dark:border-rose-900/50">
+                              <span className="block text-[9px] uppercase font-bold text-rose-600 dark:text-rose-400">Total a Pagar</span>
+                              <span className="text-xs font-black text-rose-700 dark:text-rose-300">
+                                {formatCurrency(tx.loanDetails.totalToPay, settings)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>

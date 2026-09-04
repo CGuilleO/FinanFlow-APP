@@ -10,12 +10,14 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-health', name: 'Salud & Farmacia', type: 'expense', icon: 'HeartPulse', color: '#EF4444', isDefault: true },
   { id: 'cat-entertainment', name: 'Ocio & Entretenimiento', type: 'expense', icon: 'Film', color: '#8B5CF6', isDefault: true },
   { id: 'cat-shopping', name: 'Compras & Ropa', type: 'expense', icon: 'ShoppingBag', color: '#14B8A6', isDefault: true },
+  { id: 'cat-loan-pay', name: 'Pago de Préstamo / Crédito', type: 'expense', icon: 'Receipt', color: '#4F46E5', isDefault: true },
   { id: 'cat-subscriptions', name: 'Suscripciones & Apps', type: 'expense', icon: 'CreditCard', color: '#F97316', isDefault: true },
   { id: 'cat-education', name: 'Educación & Cursos', type: 'expense', icon: 'GraduationCap', color: '#06B6D4', isDefault: true },
   { id: 'cat-other-exp', name: 'Otros Gastos', type: 'expense', icon: 'MoreHorizontal', color: '#64748B', isDefault: true },
 
   // Ingresos
   { id: 'cat-salary', name: 'Salario / Nómina', type: 'income', icon: 'Briefcase', color: '#10B981', isDefault: true },
+  { id: 'cat-loan-inc', name: 'Préstamo Recibido', type: 'income', icon: 'HandCoins', color: '#6366F1', isDefault: true },
   { id: 'cat-freelance', name: 'Freelance & Proyectos', type: 'income', icon: 'Laptop', color: '#3B82F6', isDefault: true },
   { id: 'cat-investments', name: 'Rendimientos / Inversión', type: 'income', icon: 'TrendingUp', color: '#8B5CF6', isDefault: true },
   { id: 'cat-gifts', name: 'Premios & Regalos', type: 'income', icon: 'Gift', color: '#EC4899', isDefault: true },

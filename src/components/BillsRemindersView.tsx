@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, Plus, CheckCircle2, AlertTriangle, Calendar, Bell, Trash2, Edit2, X, Check, CreditCard, Layers } from 'lucide-react';
+import { Clock, Plus, CheckCircle2, AlertTriangle, Calendar, Bell, Trash2, Edit2, X, Check, CreditCard, Layers, HandCoins } from 'lucide-react';
 import { Account, BillReminder, Category, UserSettings } from '../types';
 import { addBillReminder, deleteBillReminder, formatCurrency, formatDate, updateBillReminder, addTransaction } from '../utils/storage';
 import { IconRenderer } from './IconRenderer';
@@ -199,8 +199,13 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                       <IconRenderer name={cat?.icon || 'Bell'} className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
                         {bill.title}
+                        {bill.isLoanReminder && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-0.5">
+                            <HandCoins className="w-2.5 h-2.5" /> Préstamo
+                          </span>
+                        )}
                       </h3>
                       <span className="text-[11px] text-slate-400">
                         {cat?.name || 'Servicios'} {acc ? `• ${acc.name}` : ''}
@@ -223,6 +228,12 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {bill.notes && (
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                    {bill.notes}
+                  </p>
+                )}
 
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
                   <div>
@@ -267,7 +278,7 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                       onClick={() => handleMarkAsPaid(bill)}
                       className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm flex items-center gap-1 transition-all"
                     >
-                      <Check className="w-3.5 h-3.5" /> Pagar Factura
+                      <Check className="w-3.5 h-3.5" /> {bill.isLoanReminder ? 'Pagar Cuota' : 'Pagar Factura'}
                     </button>
                   ) : (
                     <span className="text-xs text-slate-400 flex items-center gap-1">

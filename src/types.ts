@@ -31,6 +31,22 @@ export interface TransactionItem {
   price: number;
 }
 
+export interface LoanDetails {
+  principalAmount: number; // Monto prestado recibido
+  interestRate: number; // Tasa de interés (%)
+  interestType: 'percentage' | 'fixed'; // Porcentaje (%) o valor fijo ($)
+  interestAmount: number; // Interés cobrado total
+  installmentInterestAmount: number; // Interés por cuota
+  installmentAmount: number; // Interés cuota / Valor cuota a pagar
+  installmentsCount: number; // Número de cuotas
+  totalToPay: number; // Total a pagar (prestado + intereses)
+  paymentDueDate: string; // Fecha de pago (YYYY-MM-DD)
+  reminderDaysBefore: number; // Días antes para notificar (1 día antes)
+  lenderOrBorrower?: string; // Entidad o persona que prestó
+  isPaid?: boolean; // Si ya fue pagado
+  linkedBillReminderId?: string; // ID del recordatorio automático de pago
+}
+
 export interface Transaction {
   id: string;
   type: TransactionType;
@@ -49,6 +65,8 @@ export interface Transaction {
   createdAt: string;
   updatedAt: string;
   source?: 'manual' | 'ocr' | 'voice' | 'sms' | 'invoice' | 'csv';
+  isLoanIncome?: boolean;
+  loanDetails?: LoanDetails;
 }
 
 export interface BillReminder {
@@ -65,6 +83,8 @@ export interface BillReminder {
   reminderDaysBefore: number;
   notes?: string;
   paidTransactionId?: string;
+  isLoanReminder?: boolean;
+  loanTransactionId?: string;
 }
 
 export interface SavingsGoal {

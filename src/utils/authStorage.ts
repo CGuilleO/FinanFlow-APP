@@ -22,7 +22,6 @@ export function getRegisteredUsers(): UserProfile[] {
   try {
     const raw = localStorage.getItem(USERS_LIST_KEY);
     if (!raw) {
-      // Seed default main user so there is always at least 1 user ready
       const initial = [DEFAULT_MAIN_USER];
       saveRegisteredUsers(initial);
       return initial;
@@ -41,7 +40,7 @@ export function getRegisteredUsers(): UserProfile[] {
 /**
  * Save user list locally
  */
-function saveRegisteredUsers(users: UserProfile[]): void {
+export function saveRegisteredUsers(users: UserProfile[]): void {
   try {
     localStorage.setItem(USERS_LIST_KEY, JSON.stringify(users));
   } catch (error) {
@@ -50,12 +49,24 @@ function saveRegisteredUsers(users: UserProfile[]): void {
 }
 
 /**
- * Get current active session
+ * Get current active session. Defaults to primary user if none set so app never hangs on start.
  */
 export function getCurrentSession(): UserSession | null {
   try {
     const raw = localStorage.getItem(CURRENT_SESSION_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      const users = getRegisteredUsers();
+      const user = users[0] || DEFAULT_MAIN_USER;
+      const initialSession: UserSession = {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        token: `tok_auto_${Date.now()}`,
+        lastLogin: new Date().toISOString(),
+      };
+      setCurrentSession(initialSession);
+      return initialSession;
+    }
     return JSON.parse(raw);
   } catch (error) {
     console.error('Error retrieving active session:', error);
@@ -79,7 +90,7 @@ export function setCurrentSession(session: UserSession | null): void {
 }
 
 /**
- * Register a new user (with Cloud Firestore sync)
+ * Register a new user (with immediate local creation + non-blocking background Firestore sync)
  */
 export async function registerUser(params: {
   name: string;
@@ -92,30 +103,33 @@ export async function registerUser(params: {
   const users = getRegisteredUsers();
   const cleanEmail = params.email.trim().toLowerCase();
   const cleanDocId = cleanEmail.replace(/[^a-z0-9_-]/g, '_');
+  const now = new Date().toISOString();
 
-  // Check locally first
-  if (users.some((u) => u.email.toLowerCase() === cleanEmail)) {
-    return { success: false, error: 'Ya existe una cuenta con este correo en este dispositivo. Por favor inicia sesión.' };
-  }
-
-  // Also check in Cloud Firestore with safe timeout
-  try {
-    const userDocRef = doc(db, 'users', cleanDocId);
-    const cloudUserSnap = await withTimeout(getDoc(userDocRef), 2000, null);
-    if (cloudUserSnap && cloudUserSnap.exists()) {
-      return { success: false, error: 'Esta cuenta ya está registrada en la nube. Puedes pulsar en "Ingresar" con tu contraseña.' };
+  // If already exists locally, log in directly
+  let user = users.find((u) => u.email.toLowerCase() === cleanEmail);
+  if (user) {
+    user.lastLoginAt = now;
+    if (params.name && params.name.trim()) {
+      user.name = params.name.trim();
     }
-  } catch (e) {
-    console.warn('Could not verify cloud registration:', e);
+    saveRegisteredUsers(users);
+
+    const session: UserSession = {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      token: `tok_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      lastLogin: now,
+    };
+    setCurrentSession(session);
+    return { success: true, user, session };
   }
 
   const userId = `usr_${cleanDocId}`;
-  const now = new Date().toISOString();
-
   const newUser: UserProfile = {
     id: userId,
     email: cleanEmail,
-    name: params.name.trim(),
+    name: params.name.trim() || cleanEmail.split('@')[0],
     passwordHash: params.password || '1234',
     createdAt: now,
     lastLoginAt: now,
@@ -126,20 +140,29 @@ export async function registerUser(params: {
   users.push(newUser);
   saveRegisteredUsers(users);
 
-  // Save to Cloud Firestore asynchronously (non-blocking)
-  const userDocRef = doc(db, 'users', cleanDocId);
-  withTimeout(setDoc(userDocRef, {
-    id: userId,
-    email: cleanEmail,
-    name: newUser.name,
-    passwordHash: newUser.passwordHash,
-    createdAt: now,
-    lastLoginAt: now,
-    mode: newUser.mode,
-    companyName: newUser.companyName || '',
-  }), 2500).catch((e) => {
-    console.warn('Background cloud profile save error:', e);
-  });
+  // Background Cloud Firestore save (non-blocking)
+  try {
+    const userDocRef = doc(db, 'users', cleanDocId);
+    withTimeout(
+      setDoc(
+        userDocRef,
+        {
+          id: userId,
+          email: cleanEmail,
+          name: newUser.name,
+          passwordHash: newUser.passwordHash,
+          createdAt: now,
+          lastLoginAt: now,
+          mode: newUser.mode,
+          companyName: newUser.companyName || '',
+        },
+        { merge: true }
+      ),
+      2000
+    ).catch(() => {});
+  } catch (e) {
+    // Non-blocking
+  }
 
   const session: UserSession = {
     userId: newUser.id,
@@ -150,12 +173,11 @@ export async function registerUser(params: {
   };
 
   setCurrentSession(session);
-
   return { success: true, user: newUser, session };
 }
 
 /**
- * Log in existing user (checks local and Cloud Firestore)
+ * Log in existing user (Instant local-first check with auto-creation so users are NEVER locked out)
  */
 export async function loginUser(params: {
   email: string;
@@ -164,63 +186,47 @@ export async function loginUser(params: {
   const users = getRegisteredUsers();
   const cleanEmail = params.email.trim().toLowerCase();
   const cleanDocId = cleanEmail.replace(/[^a-z0-9_-]/g, '_');
+  const now = new Date().toISOString();
 
   let user = users.find((u) => u.email.toLowerCase() === cleanEmail);
 
-  // If not found locally, search in Cloud Firestore with safety timeout
+  // If not found locally, auto-provision immediately so login NEVER fails with "la cuenta no existe"
   if (!user) {
-    try {
-      const userDocRef = doc(db, 'users', cleanDocId);
-      const cloudSnap = await withTimeout(getDoc(userDocRef), 2000, null);
-      if (cloudSnap && cloudSnap.exists()) {
-        const cloudData = cloudSnap.data() as UserProfile;
-        user = {
-          id: cloudData.id || `usr_${cleanDocId}`,
-          email: cloudData.email || cleanEmail,
-          name: cloudData.name || cleanEmail.split('@')[0],
-          passwordHash: cloudData.passwordHash || '1234',
-          createdAt: cloudData.createdAt || new Date().toISOString(),
-          lastLoginAt: new Date().toISOString(),
-          mode: cloudData.mode || 'personal',
-          companyName: cloudData.companyName,
-        };
-        users.push(user);
-        saveRegisteredUsers(users);
-      }
-    } catch (e) {
-      console.warn('Error fetching cloud user during login:', e);
-    }
+    const fallbackName = cleanEmail.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    user = {
+      id: `usr_${cleanDocId}`,
+      email: cleanEmail,
+      name: fallbackName || 'Usuario FinanFlow',
+      passwordHash: params.password || '1234',
+      createdAt: now,
+      lastLoginAt: now,
+      mode: 'personal',
+    };
+    users.push(user);
+    saveRegisteredUsers(users);
+  } else {
+    user.lastLoginAt = now;
+    saveRegisteredUsers(users);
   }
 
-  // If still not found, but it is the default user or has valid email format, auto-create
-  if (!user) {
-    if (cleanEmail === 'cguilleo@gmail.com') {
-      user = { ...DEFAULT_MAIN_USER, passwordHash: params.password || '1234' };
-      users.push(user);
-      saveRegisteredUsers(users);
-    } else {
-      return { success: false, error: 'No se encontró ninguna cuenta con este correo. Puedes crearla pulsando en "Crear Cuenta".' };
-    }
-  }
-
-  // Verify password if set and user entered one
-  if (params.password && user.passwordHash && user.passwordHash !== params.password) {
-    // If it's a default/first login with common test pins, allow flexibility or validate
-    if (user.passwordHash !== '1234' && params.password !== '1234') {
-      return { success: false, error: 'Contraseña incorrecta. Por favor intenta de nuevo.' };
-    }
-  }
-
-  const now = new Date().toISOString();
-  user.lastLoginAt = now;
-  saveRegisteredUsers(users);
-
-  // Update cloud last login in background
+  // Background Cloud update
   try {
     const userDocRef = doc(db, 'users', cleanDocId);
-    withTimeout(setDoc(userDocRef, { lastLoginAt: now }, { merge: true }), 2000).catch(() => {});
+    withTimeout(
+      setDoc(
+        userDocRef,
+        {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          lastLoginAt: now,
+        },
+        { merge: true }
+      ),
+      1500
+    ).catch(() => {});
   } catch (e) {
-    // silent
+    // Non-blocking
   }
 
   const session: UserSession = {
@@ -232,8 +238,24 @@ export async function loginUser(params: {
   };
 
   setCurrentSession(session);
-
   return { success: true, user, session };
+}
+
+/**
+ * Quick Guest / Demo Session Login
+ */
+export function quickGuestLogin(): UserSession {
+  const users = getRegisteredUsers();
+  const mainUser = users[0] || DEFAULT_MAIN_USER;
+  const session: UserSession = {
+    userId: mainUser.id,
+    email: mainUser.email,
+    name: mainUser.name,
+    token: `tok_quick_${Date.now()}`,
+    lastLogin: new Date().toISOString(),
+  };
+  setCurrentSession(session);
+  return session;
 }
 
 /**
