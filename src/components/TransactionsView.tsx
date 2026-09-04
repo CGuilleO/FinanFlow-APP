@@ -21,12 +21,14 @@ import {
   AlertTriangle,
   HandCoins,
   Bell,
-  Clock
+  Clock,
+  Building2
 } from 'lucide-react';
 import { Account, Category, Transaction, UserSettings } from '../types';
 import { deleteTransaction, formatCurrency, formatDate, clearOnlyTransactions, syncCurrentDataToCloud } from '../utils/storage';
 import { IconRenderer } from './IconRenderer';
 import { SmartCSVImportModal } from './Modals/SmartCSVImportModal';
+import { BankStatementExtractorModal } from './Modals/BankStatementExtractorModal';
 
 interface TransactionsViewProps {
   transactions: Transaction[];
@@ -37,6 +39,7 @@ interface TransactionsViewProps {
   onOpenNewTransaction: () => void;
   onEditTransaction: (tx: Transaction) => void;
   onOpenExport: () => void;
+  onOpenBankStatement?: () => void;
   onRefresh: () => void;
 }
 
@@ -49,6 +52,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onOpenNewTransaction,
   onEditTransaction,
   onOpenExport,
+  onOpenBankStatement,
   onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,6 +67,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   // Modals
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isSmartImportModalOpen, setIsSmartImportModalOpen] = useState(false);
+  const [isBankStatementModalOpen, setIsBankStatementModalOpen] = useState(false);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
@@ -176,6 +181,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              if (onOpenBankStatement) {
+                onOpenBankStatement();
+              } else {
+                setIsBankStatementModalOpen(true);
+              }
+            }}
+            className="px-3.5 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
+          >
+            <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <span>Subir Extracto (PDF / Foto)</span>
+          </button>
+
           <button
             onClick={() => setIsSmartImportModalOpen(true)}
             className="px-3.5 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
@@ -575,6 +594,19 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             />
           </div>
         </div>
+      )}
+
+      {/* Bank Statement Extractor Modal (PDF / Photo) - Fallback if not controlled by parent */}
+      {!onOpenBankStatement && (
+        <BankStatementExtractorModal
+          isOpen={isBankStatementModalOpen}
+          onClose={() => setIsBankStatementModalOpen(false)}
+          categories={categories}
+          accounts={accounts}
+          existingTransactions={transactions}
+          settings={settings}
+          onSuccess={onRefresh}
+        />
       )}
 
       {/* Smart CSV Import Modal */}

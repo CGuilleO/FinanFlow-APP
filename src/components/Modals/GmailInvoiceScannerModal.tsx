@@ -782,7 +782,7 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
                       {/* Total Amount Badge */}
                       <div className="text-right shrink-0">
                         <span className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
-                          {formatCurrency(inv.totalAmount, settings.currency)}
+                          {formatCurrency(inv.totalAmount, settings)}
                         </span>
                         {inv.confidenceScore && (
                           <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
@@ -833,7 +833,7 @@ export const GmailInvoiceScannerModal: React.FC<GmailInvoiceScannerModalProps> =
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>
-                  Importar {selectedInvoices.length} Factura{selectedInvoices.length !== 1 ? 's' : ''} ({formatCurrency(totalSelectedAmount, settings.currency)})
+                  Importar {selectedInvoices.length} Factura{selectedInvoices.length !== 1 ? 's' : ''} ({formatCurrency(totalSelectedAmount, settings)})
                 </span>
               </button>
             )}

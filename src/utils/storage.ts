@@ -536,18 +536,20 @@ export function saveStoredAIAdvice(advice: FinancialHealthAnalysis) {
 }
 
 // 8. Formatters
-export function formatCurrency(amount: number, settings?: UserSettings): string {
+export function formatCurrency(amount: number | null | undefined, settings?: UserSettings): string {
   const set = settings || getStoredSettings();
+  const num = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
   const formattedNumber = new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(Math.abs(amount));
+  }).format(Math.abs(num));
 
-  const sign = amount < 0 ? '-' : '';
-  if (set.currencyPlacement === 'prefix') {
-    return `${sign}${set.currencySymbol}${formattedNumber}`;
+  const sign = num < 0 ? '-' : '';
+  const symbol = set?.currencySymbol || '$';
+  if (set?.currencyPlacement === 'prefix') {
+    return `${sign}${symbol}${formattedNumber}`;
   }
-  return `${sign}${formattedNumber} ${set.currencySymbol}`;
+  return `${sign}${formattedNumber} ${symbol}`;
 }
 
 export function formatDate(dateString: string): string {

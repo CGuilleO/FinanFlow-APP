@@ -66,6 +66,7 @@ import { SmartParserModal } from './components/Modals/SmartParserModal';
 import { TransactionModal } from './components/Modals/TransactionModal';
 import { ImportExportModal } from './components/Modals/ImportExportModal';
 import { GmailInvoiceScannerModal } from './components/Modals/GmailInvoiceScannerModal';
+import { BankStatementExtractorModal } from './components/Modals/BankStatementExtractorModal';
 import { ClipboardQuickDetector } from './components/ClipboardQuickDetector';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 
@@ -139,6 +140,7 @@ export default function App() {
   const [smsPrefilledText, setSmsPrefilledText] = useState<string>('');
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
+  const [isBankStatementModalOpen, setIsBankStatementModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
 
@@ -998,6 +1000,7 @@ export default function App() {
               onOpenVoice={() => setIsVoiceModalOpen(true)}
               onOpenSMS={() => setIsSMSModalOpen(true)}
               onOpenGmail={() => setIsGmailModalOpen(true)}
+              onOpenBankStatement={() => setIsBankStatementModalOpen(true)}
               onNavigateToTransactions={handleNavigateToTransactions}
               onNavigateToBudgets={() => setActiveTab('budgets')}
               onNavigateToBills={() => setActiveTab('bills')}
@@ -1016,6 +1019,7 @@ export default function App() {
               onOpenNewTransaction={handleOpenNewTx}
               onEditTransaction={handleEditTx}
               onOpenExport={() => setIsImportExportModalOpen(true)}
+              onOpenBankStatement={() => setIsBankStatementModalOpen(true)}
               onRefresh={refreshAllData}
             />
           )}
@@ -1141,6 +1145,17 @@ export default function App() {
         onClose={() => setIsGmailModalOpen(false)}
         categories={categories}
         accounts={accounts}
+        settings={settings}
+        onSuccess={refreshAllData}
+      />
+
+      {/* Bank Statement AI Extractor & Reconciler Modal */}
+      <BankStatementExtractorModal
+        isOpen={isBankStatementModalOpen}
+        onClose={() => setIsBankStatementModalOpen(false)}
+        categories={categories}
+        accounts={accounts}
+        existingTransactions={transactions}
         settings={settings}
         onSuccess={refreshAllData}
       />

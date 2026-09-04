@@ -995,14 +995,16 @@ export const DashboardDrilldownModal: React.FC<DashboardDrilldownModalProps> = (
                           {acc?.name || 'Cuenta'}
                         </h3>
                         <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
-                          {acc?.type === 'bank'
+                          {(acc?.type as string) === 'bank'
                             ? 'Cuenta Bancaria'
-                            : acc?.type === 'wallet'
-                            ? 'Billetera Digital'
-                            : acc?.type === 'cash'
+                            : (acc?.type as string) === 'card'
+                            ? 'Tarjeta de Crédito / Débito'
+                            : (acc?.type as string) === 'cash'
                             ? 'Efectivo'
-                            : acc?.type === 'credit'
-                            ? 'Tarjeta de Crédito'
+                            : (acc?.type as string) === 'savings'
+                            ? 'Ahorros'
+                            : (acc?.type as string) === 'crypto'
+                            ? 'Cripto'
                             : 'Inversión'}
                         </p>
                       </div>
@@ -1279,14 +1281,16 @@ export const DashboardDrilldownModal: React.FC<DashboardDrilldownModalProps> = (
                               {acc.name}
                             </h4>
                             <span className="text-[10px] text-slate-400 capitalize">
-                              {acc.type === 'bank'
+                              {(acc.type as string) === 'bank'
                                 ? 'Cuenta Bancaria'
-                                : acc.type === 'wallet'
-                                ? 'Billetera Digital'
-                                : acc.type === 'cash'
+                                : (acc.type as string) === 'card'
+                                ? 'Tarjeta de Crédito / Débito'
+                                : (acc.type as string) === 'cash'
                                 ? 'Efectivo'
-                                : acc.type === 'credit'
-                                ? 'Tarjeta de Crédito'
+                                : (acc.type as string) === 'savings'
+                                ? 'Ahorros'
+                                : (acc.type as string) === 'crypto'
+                                ? 'Cripto'
                                 : 'Inversión'}
                             </span>
                           </div>

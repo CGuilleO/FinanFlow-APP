@@ -114,6 +114,115 @@ Devuelve los datos en formato JSON con la siguiente estructura:
   }
 });
 
+// 1.5. Parse Full Bank Statements (PDF or Images: Nequi, Bancolombia, Daviplata, Nu, etc.)
+app.post("/api/gemini/parse-bank-statement", async (req, res) => {
+  try {
+    const {
+      imageBase64,
+      mimeType = "image/png",
+      availableCategories = [],
+      availableAccounts = [],
+    } = req.body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: "No se proporcionó el documento o imagen del extracto bancario" });
+    }
+
+    const ai = getAIClient();
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, "");
+
+    const prompt = `Eres un auditor bancario experto en extractos y estados de cuenta bancarios (como Nequi, Bancolombia, Daviplata, Nu, BBVA, Banco de Bogotá, etc.).
+Analiza con máxima precisión la imagen o documento del extracto bancario adjunto.
+
+Categorías disponibles en la app: ${JSON.stringify(availableCategories)}
+Cuentas bancarias configuradas por el usuario: ${JSON.stringify(availableAccounts)}
+
+Instrucciones de extracción:
+1. Extrae los datos generales del encabezado del extracto:
+   - bankName: Nombre de la entidad (ej: "Nequi", "Bancolombia", "Daviplata", "Nu").
+   - accountNumber: Número de cuenta o depósito si aparece (ej: "3053855286").
+   - accountHolder: Nombre del titular si aparece (ej: "CARLOS GUILLERMO OCAMPO LOPEZ").
+   - period: Período del extracto (ej: "2026/08/01 a 2026/08/31").
+   - previousBalance: Saldo anterior o inicial si está visible (número).
+   - currentBalance: Saldo actual o final si está visible (número).
+   - totalCredits: Total de abonos o ingresos en el período si está visible.
+   - totalDebits: Total de cargos o egresos en el período si está visible.
+
+2. Extrae CADA UNA de las filas de movimientos/transacciones de la tabla:
+   - date: Fecha en formato estándar "YYYY-MM-DD" (por ejemplo si dice "31/08/2026", conviértelo a "2026-08-31").
+   - description: Descripción limpia y legible (ej: "Para DIANA MARTINEZ BRINEZ", "Recarga desde Bancolombia", "Retiro en corresponsales MINI").
+   - amount: Monto como NÚMERO POSITIVO absoluto (ej: 5700, 18300, 30000, 16000). Sin signos negativos.
+   - type: 
+       * "expense" si es un débito, cargo, compra, retiro, o si el valor tiene signo negativo (ej: "$-5,700.00", "$-16,000.00").
+       * "income" si es un abono, crédito, recarga o ingreso (ej: "$30,000.00", "Recarga desde Bancolombia").
+       * "transfer" si es un traslado entre cuentas propias.
+   - balanceAfter: Saldo resultante tras el movimiento si la tabla lo incluye, o null.
+   - suggestedCategory: Selecciona la mejor categoría de la lista disponible (ej: "Alimentación", "Servicios", "Transferencias", "Efectivo", "Otros").
+   - suggestedTags: Etiquetas útiles (ej: ["nequi", "extracto"]).
+
+3. Asegúrate de extraer TODOS los movimientos sin omitir ninguno. Extrae cada fila individual de la tabla del extracto.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: mimeType,
+            },
+          },
+          { text: prompt },
+        ],
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            bankName: { type: Type.STRING },
+            accountNumber: { type: Type.STRING },
+            accountHolder: { type: Type.STRING },
+            period: { type: Type.STRING },
+            previousBalance: { type: Type.NUMBER },
+            currentBalance: { type: Type.NUMBER },
+            totalCredits: { type: Type.NUMBER },
+            totalDebits: { type: Type.NUMBER },
+            transactions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  date: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  amount: { type: Type.NUMBER },
+                  type: { type: Type.STRING, description: "expense, income, or transfer" },
+                  balanceAfter: { type: Type.NUMBER },
+                  suggestedCategory: { type: Type.STRING },
+                  suggestedTags: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                  },
+                },
+                required: ["date", "description", "amount", "type"],
+              },
+            },
+          },
+          required: ["bankName", "transactions"],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    res.json({ success: true, data: parsed });
+  } catch (error: any) {
+    console.error("Error in parse-bank-statement:", error);
+    res.status(500).json({
+      error: error.message || "Error procesando el extracto bancario con IA",
+    });
+  }
+});
+
 // 2. Parse Voice Dictation, Bank SMS, or Invoices/Email text
 app.post("/api/gemini/parse-text", async (req, res) => {
   try {

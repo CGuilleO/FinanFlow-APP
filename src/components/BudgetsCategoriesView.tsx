@@ -43,7 +43,7 @@ export const BudgetsCategoriesView: React.FC<BudgetsCategoriesViewProps> = ({
   const [isAccModalOpen, setIsAccModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [accName, setAccName] = useState('');
-  const [accType, setAccType] = useState<AccountType>('checking');
+  const [accType, setAccType] = useState<AccountType>('bank');
   const [accBalance, setAccBalance] = useState<number>(0);
   const [accColor, setAccColor] = useState('#3B82F6');
 
@@ -127,7 +127,7 @@ export const BudgetsCategoriesView: React.FC<BudgetsCategoriesViewProps> = ({
   const handleOpenNewAccount = () => {
     setEditingAccount(null);
     setAccName('');
-    setAccType('checking');
+    setAccType('bank');
     setAccBalance(0);
     setAccColor('#3B82F6');
     setIsAccModalOpen(true);
@@ -453,14 +453,16 @@ export const BudgetsCategoriesView: React.FC<BudgetsCategoriesViewProps> = ({
                       {acc.name}
                     </h3>
                     <span className="text-[10px] text-slate-400 capitalize">
-                      {acc.type === 'checking'
-                        ? 'Cuenta Corriente'
-                        : acc.type === 'credit'
-                        ? 'Tarjeta de Crédito'
+                      {acc.type === 'bank'
+                        ? 'Cuenta Bancaria'
+                        : acc.type === 'card'
+                        ? 'Tarjeta'
                         : acc.type === 'cash'
                         ? 'Efectivo'
                         : acc.type === 'savings'
                         ? 'Ahorros'
+                        : acc.type === 'crypto'
+                        ? 'Cripto'
                         : 'Inversiones'}
                     </span>
                   </div>

@@ -25,7 +25,8 @@ import {
   Calendar,
   Mail,
   HandCoins,
-  Bell
+  Bell,
+  Building2
 } from 'lucide-react';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../types';
 import { formatCurrency, formatDate } from '../utils/storage';
@@ -45,6 +46,7 @@ interface DashboardViewProps {
   onOpenVoice: () => void;
   onOpenSMS: () => void;
   onOpenGmail?: () => void;
+  onOpenBankStatement?: () => void;
   onNavigateToTransactions: (filterTag?: string) => void;
   onNavigateToBudgets: () => void;
   onNavigateToBills: () => void;
@@ -64,6 +66,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenVoice,
   onOpenSMS,
   onOpenGmail,
+  onOpenBankStatement,
   onNavigateToTransactions,
   onNavigateToBudgets,
   onNavigateToBills,
@@ -245,6 +248,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <MessageSquare className="w-4 h-4 text-cyan-300" />
               Billeteras / SMS
             </button>
+            {onOpenBankStatement && (
+              <button
+                onClick={onOpenBankStatement}
+                className="flex-1 sm:flex-none px-4 py-2.5 text-xs font-bold bg-white/15 hover:bg-white/25 text-white backdrop-blur-md border border-white/20 rounded-2xl flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <Building2 className="w-4 h-4 text-purple-300" />
+                Extracto Bancario
+              </button>
+            )}
             {onOpenGmail && (
               <button
                 onClick={onOpenGmail}
