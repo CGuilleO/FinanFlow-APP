@@ -1052,6 +1052,7 @@ export default function App() {
               categories={categories}
               accounts={accounts}
               settings={settings}
+              transactions={transactions}
               onRefresh={refreshAllData}
             />
           )}

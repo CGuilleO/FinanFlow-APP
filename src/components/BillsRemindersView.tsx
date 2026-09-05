@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Clock, Plus, CheckCircle2, AlertTriangle, Calendar, Bell, Trash2, Edit2, X, Check, CreditCard, Layers, HandCoins } from 'lucide-react';
-import { Account, BillReminder, Category, UserSettings } from '../types';
+import { Clock, Plus, CheckCircle2, AlertTriangle, Calendar, Bell, Trash2, Edit2, X, Check, CreditCard, Layers, HandCoins, Coins, History } from 'lucide-react';
+import { Account, BillReminder, Category, UserSettings, Transaction } from '../types';
 import { addBillReminder, deleteBillReminder, formatCurrency, formatDate, updateBillReminder, addTransaction } from '../utils/storage';
 import { IconRenderer } from './IconRenderer';
+import { LoanPaymentModal } from './Modals/LoanPaymentModal';
+import { extractLoanFinancials } from '../utils/loanHelpers';
 import confetti from 'canvas-confetti';
 
 interface BillsRemindersViewProps {
@@ -10,6 +12,7 @@ interface BillsRemindersViewProps {
   categories: Category[];
   accounts: Account[];
   settings: UserSettings;
+  transactions?: Transaction[];
   onRefresh: () => void;
 }
 
@@ -18,10 +21,15 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
   categories,
   accounts,
   settings,
+  transactions = [],
   onRefresh,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBill, setEditingBill] = useState<BillReminder | null>(null);
+
+  // Loan Payment Modal state
+  const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
+  const [selectedLoanBill, setSelectedLoanBill] = useState<BillReminder | null>(null);
 
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState<number>(0);
@@ -98,7 +106,14 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
   };
 
   const handleMarkAsPaid = (bill: BillReminder) => {
-    // 1. Mark status as paid
+    // If it's a loan reminder, open the dedicated 3-mode payment modal
+    if (bill.isLoanReminder) {
+      setSelectedLoanBill(bill);
+      setIsLoanModalOpen(true);
+      return;
+    }
+
+    // 1. Mark regular bill status as paid
     updateBillReminder(bill.id, { status: 'paid' });
 
     // 2. Automatically record transaction
@@ -235,21 +250,68 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                   </p>
                 )}
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block">Vencimiento:</span>
-                    <strong className="text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-slate-400" />
-                      {formatDate(bill.dueDate)}
-                    </strong>
+                {bill.isLoanReminder ? (
+                  (() => {
+                    const loanFin = extractLoanFinancials(bill, transactions);
+                    return (
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                        <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-xs">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Capital Pendiente</span>
+                            <strong className="text-xs font-black text-slate-900 dark:text-white">
+                              {formatCurrency(loanFin.remainingPrincipal, settings)}
+                            </strong>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] uppercase font-bold text-amber-500 block">Interés Cuota</span>
+                            <strong className="text-xs font-black text-amber-600 dark:text-amber-400">
+                              {formatCurrency(loanFin.interestAmount, settings)}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block">Vencimiento:</span>
+                            <strong className="text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              {formatDate(bill.dueDate)}
+                            </strong>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 block">Total a Liquidar:</span>
+                            <strong className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                              {formatCurrency(loanFin.remainingPrincipal + loanFin.interestAmount, settings)}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {bill.paymentsHistory && bill.paymentsHistory.length > 0 && (
+                          <div className="text-[10px] font-semibold text-slate-500 flex items-center gap-1">
+                            <History className="w-3 h-3 text-indigo-500" />
+                            <span>{bill.paymentsHistory.length} pago(s) registrado(s)</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Vencimiento:</span>
+                      <strong className="text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        {formatDate(bill.dueDate)}
+                      </strong>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 block">Importe:</span>
+                      <strong className="text-base font-black text-slate-900 dark:text-white">
+                        {formatCurrency(bill.amount, settings)}
+                      </strong>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 block">Importe:</span>
-                    <strong className="text-base font-black text-slate-900 dark:text-white">
-                      {formatCurrency(bill.amount, settings)}
-                    </strong>
-                  </div>
-                </div>
+                )}
 
                 {/* Status Badge & Action */}
                 <div className="flex items-center justify-between pt-2">
@@ -265,7 +327,7 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                     }`}
                   >
                     {isPaid
-                      ? '✓ Pagado'
+                      ? '✓ Liquidado'
                       : isOverdue
                       ? `¡Vencido hace ${Math.abs(diffDays)} días!`
                       : isDueSoon
@@ -274,12 +336,25 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                   </span>
 
                   {!isPaid ? (
-                    <button
-                      onClick={() => handleMarkAsPaid(bill)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm flex items-center gap-1 transition-all"
-                    >
-                      <Check className="w-3.5 h-3.5" /> {bill.isLoanReminder ? 'Pagar Cuota' : 'Pagar Factura'}
-                    </button>
+                    bill.isLoanReminder ? (
+                      <button
+                        onClick={() => {
+                          setSelectedLoanBill(bill);
+                          setIsLoanModalOpen(true);
+                        }}
+                        className="px-3.5 py-1.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 rounded-xl shadow-sm shadow-indigo-600/20 flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
+                      >
+                        <Coins className="w-3.5 h-3.5" />
+                        <span>Opciones de Pago</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleMarkAsPaid(bill)}
+                        className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm flex items-center gap-1 transition-all"
+                      >
+                        <Check className="w-3.5 h-3.5" /> Pagar Factura
+                      </button>
+                    )
                   ) : (
                     <span className="text-xs text-slate-400 flex items-center gap-1">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Liquidado
@@ -443,6 +518,19 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
           </div>
         </div>
       )}
+      {/* Loan Flexible Payment Options Modal */}
+      <LoanPaymentModal
+        isOpen={isLoanModalOpen}
+        onClose={() => {
+          setIsLoanModalOpen(false);
+          setSelectedLoanBill(null);
+        }}
+        bill={selectedLoanBill}
+        accounts={accounts}
+        settings={settings}
+        transactions={transactions}
+        onPaymentSuccess={onRefresh}
+      />
     </div>
   );
 };

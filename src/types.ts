@@ -69,6 +69,18 @@ export interface Transaction {
   loanDetails?: LoanDetails;
 }
 
+export interface LoanPaymentRecord {
+  id: string;
+  date: string;
+  type: 'full' | 'principal' | 'interest';
+  amount: number;
+  principalPaid?: number;
+  interestPaid?: number;
+  remainingPrincipalAfter?: number;
+  transactionId?: string;
+  note?: string;
+}
+
 export interface BillReminder {
   id: string;
   title: string;
@@ -85,6 +97,14 @@ export interface BillReminder {
   paidTransactionId?: string;
   isLoanReminder?: boolean;
   loanTransactionId?: string;
+  principalAmount?: number;
+  interestAmount?: number;
+  remainingPrincipal?: number;
+  paidInterestTotal?: number;
+  paidPrincipalTotal?: number;
+  loanInterestRate?: number;
+  loanInterestType?: 'percentage' | 'fixed';
+  paymentsHistory?: LoanPaymentRecord[];
 }
 
 export interface SavingsGoal {

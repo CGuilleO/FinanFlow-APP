@@ -1,5 +1,5 @@
 // FinanFlow Service Worker for PWA Standalone & WebAPK & Share Target Caching
-const CACHE_NAME = 'finanflow-pwa-v5';
+const CACHE_NAME = 'finanflow-pwa-v6';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
@@ -80,6 +80,22 @@ self.addEventListener('fetch', (event) => {
 
   // Don't cache API or dynamic gemini endpoints
   if (url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  // For navigation requests (HTML page): Network-first with cache fallback
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request).then((res) => res || caches.match('/')))
+    );
     return;
   }
 
