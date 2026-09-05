@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   Filter, 
@@ -22,7 +22,12 @@ import {
   HandCoins,
   Bell,
   Clock,
-  Building2
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  Cloud,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 import { Account, Category, Transaction, UserSettings } from '../types';
 import { deleteTransaction, formatCurrency, formatDate, clearOnlyTransactions, syncCurrentDataToCloud } from '../utils/storage';
@@ -40,6 +45,7 @@ interface TransactionsViewProps {
   onEditTransaction: (tx: Transaction) => void;
   onOpenExport: () => void;
   onOpenBankStatement?: () => void;
+  onOpenSyncVerify?: () => void;
   onRefresh: () => void;
 }
 
@@ -53,6 +59,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onEditTransaction,
   onOpenExport,
   onOpenBankStatement,
+  onOpenSyncVerify,
   onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,9 +67,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>(initialTagFilter || 'all');
-  const [dateRange, setDateRange] = useState<'all' | 'current-month' | 'last-month' | 'custom'>('current-month');
+  const [dateRange, setDateRange] = useState<'all' | 'current-month' | 'last-month' | 'custom'>('all');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+  const [pageSize, setPageSize] = useState<number | 'all'>(50);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Modals
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -88,6 +97,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     }
   };
 
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedType, selectedCategory, selectedAccount, selectedTag, dateRange, customStartDate, customEndDate, pageSize]);
+
   // Extract all unique tags
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -95,6 +109,15 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       t.tags?.forEach((tag) => set.add(tag.toLowerCase()));
     });
     return Array.from(set).sort();
+  }, [transactions]);
+
+  // Global Totals (entire database)
+  const totalAllIncome = useMemo(() => {
+    return transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions]);
+
+  const totalAllExpense = useMemo(() => {
+    return transactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
   }, [transactions]);
 
   // Filter logic
@@ -141,6 +164,19 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     });
   }, [transactions, searchTerm, selectedType, selectedCategory, selectedAccount, selectedTag, dateRange, customStartDate, customEndDate, categoryMap]);
 
+  const totalFiltered = filteredTransactions.length;
+  const totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(totalFiltered / pageSize));
+
+  // Slice transactions according to pagination for high performance
+  const paginatedTransactions = useMemo(() => {
+    if (pageSize === 'all') return filteredTransactions;
+    const start = (currentPage - 1) * pageSize;
+    return filteredTransactions.slice(start, start + pageSize);
+  }, [filteredTransactions, currentPage, pageSize]);
+
+  const startIdx = totalFiltered === 0 ? 0 : pageSize === 'all' ? 1 : (currentPage - 1) * pageSize + 1;
+  const endIdx = pageSize === 'all' ? totalFiltered : Math.min(currentPage * pageSize, totalFiltered);
+
   // Totals for filtered transactions
   const filteredIncome = filteredTransactions
     .filter((t) => t.type === 'income')
@@ -166,7 +202,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
     setDateRange('all');
   };
 
-  const hasActiveFilters = searchTerm || selectedType !== 'all' || selectedCategory !== 'all' || selectedAccount !== 'all' || selectedTag !== 'all' || dateRange !== 'current-month';
+  const hasActiveFilters = Boolean(
+    searchTerm || 
+    selectedType !== 'all' || 
+    selectedCategory !== 'all' || 
+    selectedAccount !== 'all' || 
+    selectedTag !== 'all' || 
+    dateRange !== 'all'
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in pb-12">
@@ -232,8 +275,105 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         </div>
       </div>
 
+      {/* Totality & Sync Verification Hero Card */}
+      <div className="p-4 sm:p-6 bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950 text-white rounded-3xl shadow-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Base de Datos Central
+            </span>
+            <span className="text-xs text-slate-300">
+              Totalidad en el sistema: <strong className="text-white font-mono text-sm">{transactions.length.toLocaleString('es-CO')}</strong> movimientos
+            </span>
+          </div>
+
+          <h2 className="text-lg sm:text-2xl font-black tracking-tight text-white">
+            {dateRange === 'all' && !searchTerm && selectedType === 'all' && selectedCategory === 'all' && selectedAccount === 'all' && selectedTag === 'all' ? (
+              <span>Viendo la <span className="text-emerald-400">Totalidad Completa</span> ({transactions.length.toLocaleString('es-CO')} transacciones)</span>
+            ) : (
+              <span>Mostrando <span className="text-indigo-300">{totalFiltered.toLocaleString('es-CO')}</span> de {transactions.length.toLocaleString('es-CO')} transacciones totales</span>
+            )}
+          </h2>
+
+          <div className="flex items-center gap-4 text-xs text-slate-300 pt-0.5 flex-wrap">
+            <span>Ingresos Históricos: <strong className="text-emerald-400">+{formatCurrency(totalAllIncome, settings)}</strong></span>
+            <span>•</span>
+            <span>Gastos Históricos: <strong className="text-rose-400">-{formatCurrency(totalAllExpense, settings)}</strong></span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="px-3.5 py-2.5 text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Eye className="w-4 h-4 text-indigo-400" />
+              <span>Ver Totalidad ({transactions.length.toLocaleString('es-CO')})</span>
+            </button>
+          )}
+
+          {onOpenSyncVerify && (
+            <button
+              onClick={onOpenSyncVerify}
+              className="px-4 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-lg shadow-emerald-600/30 flex items-center gap-2 cursor-pointer flex-shrink-0 active:scale-95"
+              title="Comprobar si el celular y la PC tienen exactamente los mismos movimientos"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Verificar Sincronización ({transactions.length.toLocaleString('es-CO')})</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Filter Toolbar */}
       <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm space-y-4">
+        {/* Quick Period Buttons */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <span className="font-bold text-slate-400 text-[11px] flex-shrink-0 flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 text-indigo-500" /> Periodo Rápido:
+          </span>
+          <button
+            onClick={() => setDateRange('all')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all flex-shrink-0 flex items-center gap-1.5 cursor-pointer ${
+              dateRange === 'all'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+            }`}
+          >
+            <span>Totalidad Completa ({transactions.length.toLocaleString('es-CO')})</span>
+          </button>
+          <button
+            onClick={() => setDateRange('current-month')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all flex-shrink-0 cursor-pointer ${
+              dateRange === 'current-month'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+            }`}
+          >
+            Mes Actual
+          </button>
+          <button
+            onClick={() => setDateRange('last-month')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all flex-shrink-0 cursor-pointer ${
+              dateRange === 'last-month'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+            }`}
+          >
+            Mes Anterior
+          </button>
+          <button
+            onClick={() => setDateRange('custom')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all flex-shrink-0 cursor-pointer ${
+              dateRange === 'custom'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+            }`}
+          >
+            Personalizado
+          </button>
+        </div>
         {/* Row 1: Search & Type */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {/* Search Box */}
@@ -417,8 +557,9 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredTransactions.map((tx) => {
+          <>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {paginatedTransactions.map((tx) => {
               const cat = categoryMap.get(tx.categoryId);
               const acc = accountMap.get(tx.accountId);
               const toAcc = tx.toAccountId ? accountMap.get(tx.toAccountId) : null;
@@ -571,7 +712,88 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               );
             })}
           </div>
-        )}
+
+          {/* Pagination Toolbar */}
+          <div className="p-4 sm:px-6 bg-slate-50/80 dark:bg-slate-850 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+            {/* Range and Totals Info */}
+            <div className="text-slate-500 dark:text-slate-400 font-medium text-center sm:text-left">
+              Mostrando <strong className="text-slate-900 dark:text-white font-mono">{startIdx.toLocaleString('es-CO')} – {endIdx.toLocaleString('es-CO')}</strong> de <strong className="text-slate-900 dark:text-white font-mono">{totalFiltered.toLocaleString('es-CO')}</strong> movimientos
+              {totalFiltered < transactions.length && (
+                <span className="text-slate-400"> (Total registrado: {transactions.length.toLocaleString('es-CO')})</span>
+              )}
+            </div>
+
+            {/* Page Size Selector & Navigation Buttons */}
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              {/* Page Size Selector */}
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 px-1.5 uppercase">Ver:</span>
+                {[50, 100, 200, 'all'].map((sz) => (
+                  <button
+                    key={String(sz)}
+                    onClick={() => {
+                      setPageSize(sz as any);
+                      setCurrentPage(1);
+                    }}
+                    className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                      pageSize === sz
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {sz === 'all' ? 'Todos' : sz}
+                  </button>
+                ))}
+              </div>
+
+              {/* Page Navigation */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer font-semibold"
+                    title="Primera página"
+                  >
+                    Primera
+                  </button>
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-1 cursor-pointer font-semibold"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Anterior</span>
+                  </button>
+
+                  <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white shadow-xs">
+                    {currentPage} / {totalPages}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-1 cursor-pointer font-semibold"
+                  >
+                    <span>Siguiente</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer font-semibold"
+                    title="Última página"
+                  >
+                    Última
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
       </div>
 
       {/* Ticket Image Preview Modal */}

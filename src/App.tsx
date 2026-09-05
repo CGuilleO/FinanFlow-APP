@@ -25,6 +25,7 @@ import {
   RotateCcw,
   RefreshCw,
   Mail,
+  ShieldCheck,
 } from 'lucide-react';
 import { Account, BillReminder, Category, FinancialHealthAnalysis, Transaction, UserSettings, UserSession } from './types';
 import { APP_VERSION, BUILD_DATE } from './version';
@@ -67,6 +68,7 @@ import { TransactionModal } from './components/Modals/TransactionModal';
 import { ImportExportModal } from './components/Modals/ImportExportModal';
 import { GmailInvoiceScannerModal } from './components/Modals/GmailInvoiceScannerModal';
 import { BankStatementExtractorModal } from './components/Modals/BankStatementExtractorModal';
+import { DeviceSyncVerifyModal } from './components/Modals/DeviceSyncVerifyModal';
 import { ClipboardQuickDetector } from './components/ClipboardQuickDetector';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 
@@ -143,6 +145,7 @@ export default function App() {
   const [isBankStatementModalOpen, setIsBankStatementModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState(false);
+  const [isDeviceSyncModalOpen, setIsDeviceSyncModalOpen] = useState(false);
 
   // Load data & seed on mount
   const refreshAllData = () => {
@@ -647,6 +650,16 @@ export default function App() {
             )}
           </button>
 
+          {/* Device Sync & Total Transactions Quick Button on Mobile */}
+          <button
+            onClick={() => setIsDeviceSyncModalOpen(true)}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700/60 active:scale-95 text-xs font-bold"
+            title="Comprobar totalidad y sincronización con otros dispositivos"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="font-mono text-[11px]">{transactions.length} tx</span>
+          </button>
+
           {/* Cloud Sync Button */}
           <button
             onClick={handleManualCloudSync}
@@ -867,6 +880,17 @@ export default function App() {
                 </button>
               </div>
 
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setIsDeviceSyncModalOpen(true);
+                }}
+                className="w-full py-2.5 px-3 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Verificar Sincronización ({transactions.length.toLocaleString('es-CO')} tx)</span>
+              </button>
+
               <div className="flex items-center justify-between px-2 pt-1 text-xs text-slate-400">
                 <span className="flex items-center gap-1.5 text-[11px]">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -971,6 +995,16 @@ export default function App() {
               <span>{isSyncingCloud ? 'Sincronizando...' : 'Sincronización Nube'}</span>
             </button>
 
+            {/* Total Transactions & Device Sync Verification Badge */}
+            <button
+              onClick={() => setIsDeviceSyncModalOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900 dark:bg-slate-800 text-white hover:bg-slate-850 dark:hover:bg-slate-700 text-xs font-bold transition-all shadow-sm cursor-pointer border border-slate-700 active:scale-95"
+              title="Comprobar si el celular y la PC tienen exactamente las mismas transacciones sincronizadas"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Totalidad: <strong className="font-mono text-emerald-300">{transactions.length.toLocaleString('es-CO')}</strong> tx</span>
+            </button>
+
             {/* Currency Pill */}
             <div className="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
               Moneda: {settings.currency} ({settings.currencySymbol})
@@ -1032,6 +1066,7 @@ export default function App() {
               onEditTransaction={handleEditTx}
               onOpenExport={() => setIsImportExportModalOpen(true)}
               onOpenBankStatement={() => setIsBankStatementModalOpen(true)}
+              onOpenSyncVerify={() => setIsDeviceSyncModalOpen(true)}
               onRefresh={refreshAllData}
             />
           )}
@@ -1171,6 +1206,17 @@ export default function App() {
         existingTransactions={transactions}
         settings={settings}
         onSuccess={refreshAllData}
+      />
+
+      {/* Multi-Device Totality & Sync Verification Modal */}
+      <DeviceSyncVerifyModal
+        isOpen={isDeviceSyncModalOpen}
+        onClose={() => setIsDeviceSyncModalOpen(false)}
+        localTransactions={transactions}
+        accounts={accounts}
+        bills={bills}
+        settings={settings}
+        onRefreshData={refreshAllData}
       />
 
       {/* Auth Modal (Login / Register / Switch Account) */}

@@ -94,12 +94,26 @@ app.get("/api/sync/status", (req, res) => {
         success: true,
         hasData: true,
         transactionCount: parsed.transactions?.length || 0,
+        accountsCount: parsed.accounts?.length || 0,
+        billsCount: parsed.bills?.length || 0,
+        categoriesCount: parsed.categories?.length || 0,
+        lastTransactionDate: parsed.transactions?.[0]?.date || null,
         updatedAt: parsed.updatedAt || null,
         updatedByDevice: parsed.updatedByDevice || "Desconocido",
       });
     }
 
-    return res.json({ success: true, hasData: false, transactionCount: 0 });
+    return res.json({ 
+      success: true, 
+      hasData: false, 
+      transactionCount: 0,
+      accountsCount: 0,
+      billsCount: 0,
+      categoriesCount: 0,
+      lastTransactionDate: null,
+      updatedAt: null,
+      updatedByDevice: null
+    });
   } catch (err) {
     res.status(500).json({ error: "Error checking sync status" });
   }
