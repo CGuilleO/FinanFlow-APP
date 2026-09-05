@@ -54,6 +54,9 @@ export function saveRegisteredUsers(users: UserProfile[]): void {
 export function getCurrentSession(): UserSession | null {
   try {
     const raw = localStorage.getItem(CURRENT_SESSION_KEY);
+    if (raw === 'logged_out') {
+      return null;
+    }
     if (!raw) {
       const users = getRegisteredUsers();
       const user = users[0] || DEFAULT_MAIN_USER;
@@ -80,7 +83,7 @@ export function getCurrentSession(): UserSession | null {
 export function setCurrentSession(session: UserSession | null): void {
   try {
     if (!session) {
-      localStorage.removeItem(CURRENT_SESSION_KEY);
+      localStorage.setItem(CURRENT_SESSION_KEY, 'logged_out');
     } else {
       localStorage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
     }
