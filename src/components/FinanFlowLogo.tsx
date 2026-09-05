@@ -21,18 +21,25 @@ export const FinanFlowLogo: React.FC<FinanFlowLogoProps> = ({
     xl: 'w-16 h-16 rounded-3xl',
   }[size];
 
+  const [imgError, setImgError] = React.useState(false);
+
   return (
     <div
-      className={`relative flex items-center justify-center p-1 bg-gradient-to-br from-indigo-500 via-purple-600 to-cyan-500 p-[1.5px] shadow-md shadow-indigo-500/25 group hover:shadow-indigo-500/40 hover:scale-105 transition-all duration-300 ${sizeMap} ${className}`}
-      title="FinanFlow AI Wallet"
+      className={`relative flex items-center justify-center overflow-hidden shadow-md shadow-indigo-500/25 group hover:shadow-indigo-500/40 hover:scale-105 transition-all duration-300 ${sizeMap} ${className}`}
+      title="FinanFlow AI"
     >
-      {/* Inner vibrant container with high-contrast depth */}
-      <div className="w-full h-full rounded-[inherit] bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-950 flex items-center justify-center p-1 overflow-hidden relative">
-        {/* Subtle interior luminous back-glow */}
-        <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/30 via-indigo-500/20 to-amber-500/20 rounded-[inherit] pointer-events-none" />
-
-        {/* High-Tech Vector AI Wallet SVG */}
-        <svg
+      {!imgError ? (
+        <img
+          src="/icon-192.png"
+          alt="FinanFlow AI"
+          className="w-full h-full object-cover rounded-[inherit]"
+          onError={() => setImgError(true)}
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <div className="w-full h-full rounded-[inherit] bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-950 flex items-center justify-center p-1 overflow-hidden relative">
+          <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/30 via-indigo-500/20 to-amber-500/20 rounded-[inherit] pointer-events-none" />
+          <svg
           viewBox="0 0 100 100"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -188,6 +195,7 @@ export const FinanFlowLogo: React.FC<FinanFlowLogoProps> = ({
           />
         </svg>
       </div>
+    )}
     </div>
   );
 };

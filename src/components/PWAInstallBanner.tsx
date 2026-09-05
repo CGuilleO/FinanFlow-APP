@@ -75,9 +75,11 @@ export const PWAInstallBanner: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
-                <Download className="w-5 h-5" />
-              </div>
+              <img
+                src="/icon-192.png"
+                alt="FinanFlow AI"
+                className="w-11 h-11 rounded-2xl object-cover shadow-md shadow-indigo-600/30 border border-white/10"
+              />
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   Instalar FinanFlow como App Nativa
@@ -150,9 +152,11 @@ export const PWAInstallBanner: React.FC = () => {
     <>
       <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-cyan-900 text-white px-4 py-2.5 border-b border-indigo-700/50 flex items-center justify-between gap-3 shadow-md animate-in slide-in-from-top">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-cyan-300 flex-shrink-0 border border-white/20">
-            <Download className="w-4 h-4" />
-          </div>
+          <img
+            src="/icon-192.png"
+            alt="FinanFlow AI"
+            className="w-8 h-8 rounded-xl object-cover flex-shrink-0 border border-white/20 shadow-sm"
+          />
           <div className="truncate">
             <p className="text-xs font-bold text-white flex items-center gap-1.5">
               <span>Instala FinanFlow como App Nativa</span>
