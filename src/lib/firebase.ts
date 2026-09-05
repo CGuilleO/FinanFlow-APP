@@ -259,39 +259,108 @@ async function loadFullTransactions(cleanId: string, mainData: any): Promise<any
   return mainData.transactions || [];
 }
 
-// Subscribe to real-time updates for a user account
+// Subscribe to real-time updates for a user account (Server API + Firestore listener)
 export function subscribeToUserCloudData(userId: string, onData: (data: CloudUserData) => void) {
   if (!userId) return () => {};
+  
+  let isChecking = false;
+  let lastKnownUpdatedAt = '';
+
+  const checkServerSync = async () => {
+    if (isChecking) return;
+    isChecking = true;
+    try {
+      const serverData = await fetchUserCloudData(userId);
+      if (serverData && serverData.updatedAt && serverData.updatedAt !== lastKnownUpdatedAt) {
+        lastKnownUpdatedAt = serverData.updatedAt;
+        onData(serverData);
+      }
+    } catch (e) {
+      // Non-blocking
+    } finally {
+      isChecking = false;
+    }
+  };
+
+  // Immediate check
+  checkServerSync();
+
+  // Poll server periodically
+  const intervalId = setInterval(checkServerSync, 8000);
+
+  // Sync on window focus or visibility change (switching tabs/apps)
+  const handleFocus = () => { checkServerSync(); };
+  window.addEventListener('focus', handleFocus);
+  const handleVisibility = () => {
+    if (document.visibilityState === 'visible') {
+      checkServerSync();
+    }
+  };
+  document.addEventListener('visibilitychange', handleVisibility);
+
+  // Secondary Firestore listener
+  let unsubFirestore = () => {};
   try {
     const cleanId = normalizeUserId(userId);
     const userDocRef = doc(db, 'userData', cleanId);
 
-    return onSnapshot(userDocRef, async (docSnap) => {
+    unsubFirestore = onSnapshot(userDocRef, async (docSnap) => {
       try {
         if (docSnap.exists()) {
           const rawData = docSnap.data() as any;
           const transactions = await loadFullTransactions(cleanId, rawData);
-          
           onData({
             ...rawData,
             transactions,
           });
         }
       } catch (err) {
-        console.warn('Error processing snapshot data:', err);
+        // Non-blocking
       }
-    }, (error) => {
-      console.warn('Firestore sync snapshot notice:', error?.message || error);
-    });
+    }, () => {});
   } catch (err) {
-    console.warn('Could not initialize cloud listener:', err);
-    return () => {};
+    // Non-blocking
   }
+
+  return () => {
+    clearInterval(intervalId);
+    window.removeEventListener('focus', handleFocus);
+    document.removeEventListener('visibilitychange', handleVisibility);
+    unsubFirestore();
+  };
 }
 
-// Push local data to cloud (handles large sets of 2000+ transactions seamlessly)
-export async function pushUserCloudData(userId: string, data: CloudUserData) {
+// Push local data to server persistence and cloud
+export async function pushUserCloudData(userId: string, data: CloudUserData): Promise<boolean> {
   if (!userId) return false;
+  let serverSaved = false;
+
+  // 1. Central Server Persistence (always available across PC, Mobile, and PWA)
+  try {
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        data,
+        sourceDevice: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'PC / Escritorio',
+      }),
+    });
+
+    if (res.ok) {
+      const resJson = await res.json();
+      if (resJson.success) {
+        serverSaved = true;
+      } else if (resJson.rejectedReason === 'server_has_richer_data' && resJson.serverData) {
+        // Server protected older richer data; return false and keep richer data
+        return false;
+      }
+    }
+  } catch (err) {
+    console.warn('Server sync notice:', err);
+  }
+
+  // 2. Secondary Firestore write
   try {
     const cleanId = normalizeUserId(userId);
     const userDocRef = doc(db, 'userData', cleanId);
@@ -299,12 +368,10 @@ export async function pushUserCloudData(userId: string, data: CloudUserData) {
     const transactions = data.transactions || [];
     const totalTransactions = transactions.length;
 
-    // If transactions are large, store them in chunk sub-documents to prevent 1MB Firestore limit
     if (totalTransactions > CHUNK_SIZE) {
       const chunkCount = Math.ceil(totalTransactions / CHUNK_SIZE);
       const batch = writeBatch(db);
 
-      // Write chunks
       for (let i = 0; i < chunkCount; i++) {
         const chunkDocRef = doc(db, 'userData', cleanId, 'chunks', `chunk_${i}`);
         const chunkItems = transactions.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
@@ -315,7 +382,6 @@ export async function pushUserCloudData(userId: string, data: CloudUserData) {
         });
       }
 
-      // Write main document without heavy transactions array
       batch.set(userDocRef, {
         accounts: data.accounts || [],
         categories: data.categories || [],
@@ -328,9 +394,8 @@ export async function pushUserCloudData(userId: string, data: CloudUserData) {
         updatedByDevice: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Web / PC'
       }, { merge: true });
 
-      await withTimeout(batch.commit(), 5000);
+      await withTimeout(batch.commit(), 3000);
     } else {
-      // Normal size, store directly
       await withTimeout(setDoc(userDocRef, {
         transactions,
         accounts: data.accounts || [],
@@ -342,24 +407,37 @@ export async function pushUserCloudData(userId: string, data: CloudUserData) {
         chunkCount: 0,
         updatedAt: new Date().toISOString(),
         updatedByDevice: navigator.userAgent.includes('Mobile') ? 'Móvil' : 'Web / PC'
-      }, { merge: true }), 4000);
+      }, { merge: true }), 2500);
     }
-
-    console.log(`Cloud sync successful: ${totalTransactions} transactions saved for user ${cleanId}`);
-    return true;
   } catch (error) {
-    console.warn('Error saving data to cloud:', error);
-    return false;
+    // Non-blocking Firestore error
   }
+
+  return serverSaved;
 }
 
-// Fetch once from cloud
+// Fetch once from server persistence or cloud
 export async function fetchUserCloudData(userId: string): Promise<CloudUserData | null> {
   if (!userId) return null;
+
+  // 1. First fetch from Central Server Persistence
+  try {
+    const res = await fetch(`/api/sync?userId=${encodeURIComponent(userId)}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data) {
+        return json.data;
+      }
+    }
+  } catch (err) {
+    // Non-blocking
+  }
+
+  // 2. Secondary Firestore fetch
   try {
     const cleanId = normalizeUserId(userId);
     const userDocRef = doc(db, 'userData', cleanId);
-    const docSnap = await withTimeout(getDoc(userDocRef), 3000, null);
+    const docSnap = await withTimeout(getDoc(userDocRef), 2000, null);
     if (docSnap && docSnap.exists()) {
       const rawData = docSnap.data() as any;
       const transactions = await loadFullTransactions(cleanId, rawData);
@@ -368,9 +446,9 @@ export async function fetchUserCloudData(userId: string): Promise<CloudUserData 
         transactions,
       };
     }
-    return null;
   } catch (error) {
-    console.warn('Notice fetching data from cloud:', error);
-    return null;
+    // Non-blocking
   }
+
+  return null;
 }

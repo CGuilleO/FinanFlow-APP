@@ -730,6 +730,7 @@ export function applyCloudDataLocally(cloudData: CloudUserData) {
   try {
     if (cloudData.transactions !== undefined && Array.isArray(cloudData.transactions) && cloudData.transactions.length > 0) {
       localStorage.setItem(getUserStorageKey(STORAGE_KEYS.TRANSACTIONS), JSON.stringify(cloudData.transactions));
+      localStorage.setItem(getUserStorageKey(STORAGE_KEYS.INITIALIZED_FLAG), 'true');
     }
     if (cloudData.accounts !== undefined && Array.isArray(cloudData.accounts) && cloudData.accounts.length > 0) {
       localStorage.setItem(getUserStorageKey(STORAGE_KEYS.ACCOUNTS), JSON.stringify(cloudData.accounts));

@@ -180,19 +180,24 @@ export default function App() {
       const effectiveId = getEffectiveUserId();
       const localTxs = getStoredTransactions();
 
-      // 1. If local has records (like on Desktop with 2833 transactions), push to cloud
-      if (localTxs.length > 0) {
-        await syncCurrentDataToCloud();
-      }
-
-      // 2. Fetch from cloud and apply
+      // Check server first to see if server has richer data
       const cloudData = await fetchUserCloudData(effectiveId);
-      if (cloudData) {
+      const cloudTxCount = cloudData?.transactions?.length || 0;
+
+      if (cloudData && cloudTxCount > localTxs.length) {
         applyCloudDataLocally(cloudData);
         refreshAllData();
+        showSyncToast(`¡Datos sincronizados desde el servidor! (${cloudTxCount} movimientos restaurados)`);
+      } else if (localTxs.length > 0) {
+        await syncCurrentDataToCloud();
+        showSyncToast(`¡Guardado en el servidor! (${localTxs.length} movimientos sincronizados)`);
+      } else if (cloudData) {
+        applyCloudDataLocally(cloudData);
+        refreshAllData();
+        showSyncToast(`¡Sincronización completada! (${cloudTxCount} movimientos)`);
+      } else {
+        showSyncToast('Servidor listo y sincronizado');
       }
-
-      showSyncToast(`¡Sincronización en la nube completada! (${getStoredTransactions().length} movimientos)`);
     } catch (err) {
       console.error('Error during manual sync:', err);
       showSyncToast('Error de sincronización. Verifica tu conexión.');
@@ -201,30 +206,37 @@ export default function App() {
     }
   };
 
-  // Subscribe to Cloud Firestore real-time changes across devices
+  // Subscribe to Central Server Persistence and Cloud real-time changes across devices
   useEffect(() => {
     refreshAllData();
     const effectiveId = getEffectiveUserId();
 
-    // 1. Initial check: If local has existing transactions (e.g. 2833 on Desktop), sync to cloud
-    const localTxs = getStoredTransactions();
-    if (localTxs.length > 0) {
-      syncCurrentDataToCloud().catch(console.error);
-    }
-
-    // 2. Fetch latest from cloud (e.g. for phone receiving data from PC)
+    // 1. Initial check:
+    // First, fetch from server to see if server has rich data (e.g. mobile opening for first time)
     fetchUserCloudData(effectiveId).then((cloudData) => {
-      if (cloudData && (cloudData.transactions?.length || cloudData.accounts?.length)) {
+      const localTxs = getStoredTransactions();
+      const cloudTxCount = cloudData?.transactions?.length || 0;
+
+      if (cloudData && cloudTxCount > localTxs.length) {
+        // Server has more transactions -> Adopt server data!
         applyCloudDataLocally(cloudData);
         refreshAllData();
+      } else if (localTxs.length > 0) {
+        // Local has rich data (PC) -> Push to server so mobile can access it!
+        syncCurrentDataToCloud().catch(console.error);
       }
     }).catch(console.error);
 
-    // 3. Listen to real-time changes in Firestore
+    // 2. Real-time subscription across devices
     const unsubCloud = subscribeToUserCloudData(effectiveId, (cloudData) => {
       if (cloudData && (cloudData.transactions !== undefined || cloudData.accounts !== undefined)) {
-        applyCloudDataLocally(cloudData);
-        refreshAllData();
+        const localTxs = getStoredTransactions();
+        const incomingCount = cloudData.transactions?.length || 0;
+        // Don't overwrite if local is richer unless incoming has valid transactions
+        if (incomingCount >= localTxs.length || localTxs.length <= 4) {
+          applyCloudDataLocally(cloudData);
+          refreshAllData();
+        }
       }
     });
 

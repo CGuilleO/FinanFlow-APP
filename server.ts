@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 
@@ -7,6 +8,20 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+const DATA_DIR = path.join(process.cwd(), "data");
+if (!fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (e) {
+    console.error("Could not create data dir:", e);
+  }
+}
+
+function getStoreFilePath(userId?: string) {
+  const safeId = (userId || "main").toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+  return path.join(DATA_DIR, `store_${safeId}.json`);
+}
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -30,6 +45,124 @@ function getAIClient() {
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Central Multi-device Persistence & Sync API (PC, Mobile, Tablet, PWA)
+app.get("/api/sync", (req, res) => {
+  try {
+    const userId = (req.query.userId as string) || "main";
+    const userPath = getStoreFilePath(userId);
+    const mainPath = getStoreFilePath("main");
+
+    let chosenPath = userPath;
+    if (!fs.existsSync(chosenPath) && fs.existsSync(mainPath)) {
+      chosenPath = mainPath;
+    }
+
+    // If still not found, check if any store_*.json exists with data
+    if (!fs.existsSync(chosenPath)) {
+      const files = fs.readdirSync(DATA_DIR).filter((f) => f.startsWith("store_") && f.endsWith(".json"));
+      if (files.length > 0) {
+        chosenPath = path.join(DATA_DIR, files[0]);
+      }
+    }
+
+    if (fs.existsSync(chosenPath)) {
+      const content = fs.readFileSync(chosenPath, "utf-8");
+      const parsed = JSON.parse(content);
+      return res.json({ success: true, data: parsed });
+    }
+
+    return res.json({ success: true, data: null });
+  } catch (err: any) {
+    console.error("Error reading sync store:", err);
+    res.status(500).json({ error: "Error reading sync store" });
+  }
+});
+
+app.get("/api/sync/status", (req, res) => {
+  try {
+    const userId = (req.query.userId as string) || "main";
+    const userPath = getStoreFilePath(userId);
+    const mainPath = getStoreFilePath("main");
+
+    let chosenPath = fs.existsSync(userPath) ? userPath : fs.existsSync(mainPath) ? mainPath : null;
+    if (chosenPath && fs.existsSync(chosenPath)) {
+      const content = fs.readFileSync(chosenPath, "utf-8");
+      const parsed = JSON.parse(content);
+      return res.json({
+        success: true,
+        hasData: true,
+        transactionCount: parsed.transactions?.length || 0,
+        updatedAt: parsed.updatedAt || null,
+        updatedByDevice: parsed.updatedByDevice || "Desconocido",
+      });
+    }
+
+    return res.json({ success: true, hasData: false, transactionCount: 0 });
+  } catch (err) {
+    res.status(500).json({ error: "Error checking sync status" });
+  }
+});
+
+app.post("/api/sync", (req, res) => {
+  try {
+    const { userId, data, isManualForce, sourceDevice } = req.body;
+    if (!data) {
+      return res.status(400).json({ error: "No data provided for sync" });
+    }
+
+    const safeId = (userId || "main").toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+    const userPath = getStoreFilePath(safeId);
+    const mainPath = getStoreFilePath("main");
+
+    // Smart Safeguard: Prevent empty or fresh starter devices (e.g. mobile opening for first time)
+    // from overwriting the desktop's real transactions
+    const checkPath = fs.existsSync(userPath) ? userPath : fs.existsSync(mainPath) ? mainPath : null;
+    if (checkPath && !isManualForce) {
+      try {
+        const existing = JSON.parse(fs.readFileSync(checkPath, "utf-8"));
+        const existingTxCount = existing.transactions?.length || 0;
+        const incomingTxCount = data.transactions?.length || 0;
+
+        // If existing data has more than 5 transactions and incoming has fewer than 5
+        if (existingTxCount > 5 && incomingTxCount <= 5) {
+          console.warn(`[Sync Shield] Protected existing data: Server has ${existingTxCount} txs, incoming only ${incomingTxCount}`);
+          return res.json({
+            success: false,
+            rejectedReason: "server_has_richer_data",
+            serverData: existing,
+            message: `El servidor tiene ${existingTxCount} movimientos y protegió tus datos para no sobrescribirlos.`,
+          });
+        }
+      } catch (checkErr) {
+        console.warn("Check existing sync data warning:", checkErr);
+      }
+    }
+
+    const payload = {
+      ...data,
+      updatedAt: new Date().toISOString(),
+      updatedByDevice: sourceDevice || (req.headers["user-agent"]?.includes("Mobile") ? "Móvil" : "PC / Escritorio"),
+      totalTransactions: data.transactions?.length || 0,
+    };
+
+    // Save to user path and main backup path
+    fs.writeFileSync(userPath, JSON.stringify(payload, null, 2), "utf-8");
+    if (safeId !== "main") {
+      fs.writeFileSync(mainPath, JSON.stringify(payload, null, 2), "utf-8");
+    }
+
+    console.log(`[Sync] Saved ${payload.totalTransactions} transactions for user ${safeId} from ${payload.updatedByDevice}`);
+    return res.json({
+      success: true,
+      updatedAt: payload.updatedAt,
+      transactionCount: payload.totalTransactions,
+    });
+  } catch (err: any) {
+    console.error("Error saving sync data:", err);
+    res.status(500).json({ error: "Error saving sync data" });
+  }
 });
 
 // 1. OCR Ticket / Receipt Scanner
