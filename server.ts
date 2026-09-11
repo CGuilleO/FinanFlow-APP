@@ -740,9 +740,21 @@ Instrucciones:
   }
 });
 
+// Process-level crash prevention to keep Cloud Run healthy
+process.on("uncaughtException", (err) => {
+  console.error("[FinanFlow Uncaught Exception]", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[FinanFlow Unhandled Rejection]", reason);
+});
+
 // Vite middleware for development / Static file serving for production
 async function setupViteOrStatic() {
-  if (process.env.NODE_ENV !== "production") {
+  const distPath = path.join(process.cwd(), "dist");
+  const hasDist = fs.existsSync(path.join(distPath, "index.html"));
+  const isProduction = process.env.NODE_ENV === "production" || hasDist;
+
+  if (!isProduction) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -750,15 +762,30 @@ async function setupViteOrStatic() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    // Serve static assets from dist folder with proper MIME types & caching
+    app.use(express.static(distPath, { maxAge: "1d", etag: true }));
+
+    // SPA fallback: any unmatched request returns index.html
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexPath = path.join(distPath, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send("FinanFlow: dist/index.html not found. Please build the project first.");
+      }
     });
   }
 
+  // Global Express error handler to prevent container exit
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("[Global Server Error]", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal Server Error", message: err?.message || "Unknown error" });
+    }
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`FinanFlow server running on http://localhost:${PORT}`);
+    console.log(`FinanFlow server running on http://0.0.0.0:${PORT} (mode: ${isProduction ? 'production' : 'development'})`);
   });
 }
 
