@@ -49,3 +49,24 @@ export function generateStarterTransactions(): Transaction[] {
 export const DEFAULT_BILLS: BillReminder[] = [];
 
 export const DEFAULT_GOALS: SavingsGoal[] = [];
+
+// Helper to determine if a category corresponds to utilities (luz, agua, gas, internet, servicios públicos)
+export function isUtilitiesCategory(category?: Category | null): boolean {
+  if (!category) return false;
+  if (category.id === 'cat-utilities') return true;
+  const lower = (category.name || '').toLowerCase();
+  return (
+    lower.includes('servicio') ||
+    lower.includes('luz') ||
+    lower.includes('agua') ||
+    lower.includes('gas') ||
+    lower.includes('internet') ||
+    lower.includes('energía') ||
+    lower.includes('energia') ||
+    lower.includes('acueducto') ||
+    lower.includes('telefonía') ||
+    lower.includes('telefonia') ||
+    lower.includes('fibra') ||
+    lower.includes('alcantarillado')
+  );
+}

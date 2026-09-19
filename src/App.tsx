@@ -1309,6 +1309,7 @@ export default function App() {
           setEditingTransaction(null);
         }}
         transactionToEdit={editingTransaction}
+        transactions={transactions}
         categories={categories}
         accounts={accounts}
         settings={settings}

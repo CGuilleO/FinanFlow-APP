@@ -27,7 +27,9 @@ import {
   ChevronRight,
   Cloud,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  FileCheck,
+  FileText
 } from 'lucide-react';
 import { Account, Category, Transaction, UserSettings } from '../types';
 import { deleteTransaction, formatCurrency, formatDate, clearOnlyTransactions, syncCurrentDataToCloud } from '../utils/storage';
@@ -74,7 +76,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Modals
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewReceipt, setPreviewReceipt] = useState<{ url: string; name?: string; type?: string } | null>(null);
   const [isSmartImportModalOpen, setIsSmartImportModalOpen] = useState(false);
   const [isBankStatementModalOpen, setIsBankStatementModalOpen] = useState(false);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
@@ -591,10 +593,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         )}
                         {tx.receiptImage && (
                           <button
-                            onClick={() => setPreviewImage(tx.receiptImage || null)}
-                            className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-md"
+                            onClick={() => setPreviewReceipt({ url: tx.receiptImage!, name: tx.receiptFileName, type: tx.receiptFileType })}
+                            className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-800 flex items-center gap-1 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/70 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
                           >
-                            <Camera className="w-3 h-3" /> Ver Ticket
+                            <FileCheck className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                            <span>{tx.receiptFileName || (tx.receiptFileType === 'pdf' ? 'Constancia PDF' : 'Ver Constancia')}</span>
                           </button>
                         )}
                       </div>
@@ -797,23 +800,59 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       </div>
 
       {/* Ticket Image Preview Modal */}
-      {previewImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="relative max-w-lg w-full bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800">
-            <button
-              onClick={() => setPreviewImage(null)}
-              className="absolute top-3 right-3 p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-full hover:bg-slate-200"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">
-              Comprobante / Ticket de Compra
-            </h3>
-            <img
-              src={previewImage}
-              alt="Comprobante"
-              className="max-h-[70vh] w-full object-contain rounded-xl border border-slate-200 dark:border-slate-700"
-            />
+      {previewReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="relative max-w-xl w-full bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <FileCheck className="w-4 h-4 text-amber-500" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-sm">
+                  {previewReceipt.name || 'Constancia de Pago / Comprobante'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setPreviewReceipt(null)}
+                className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-full hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {previewReceipt.type === 'pdf' || previewReceipt.url.startsWith('data:application/pdf') ? (
+              <div className="space-y-3">
+                <iframe
+                  src={previewReceipt.url}
+                  className="w-full h-88 rounded-xl border border-slate-200 dark:border-slate-700"
+                  title="Constancia de Servicio PDF"
+                />
+                <div className="flex justify-end">
+                  <a
+                    href={previewReceipt.url}
+                    download={previewReceipt.name || 'constancia_servicio.pdf'}
+                    className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Descargar PDF
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <img
+                  src={previewReceipt.url}
+                  alt="Comprobante"
+                  className="max-h-[65vh] w-full object-contain rounded-xl border border-slate-200 dark:border-slate-700"
+                />
+                <div className="flex justify-end">
+                  <a
+                    href={previewReceipt.url}
+                    download={previewReceipt.name || 'constancia_servicio.jpg'}
+                    className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Descargar Imagen
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

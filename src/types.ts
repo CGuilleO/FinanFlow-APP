@@ -59,6 +59,8 @@ export interface Transaction {
   tags: string[];
   notes?: string;
   receiptImage?: string; // base64 preview or data URI
+  receiptFileName?: string; // name of attached proof or bill
+  receiptFileType?: 'pdf' | 'image' | string; // file mime/type
   items?: TransactionItem[];
   isRecurring?: boolean;
   recurringFrequency?: 'daily' | 'weekly' | 'monthly' | 'yearly';
