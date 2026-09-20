@@ -29,7 +29,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   FileCheck,
-  FileText
+  FileText,
+  BarChart3,
 } from 'lucide-react';
 import { Account, Category, Transaction, UserSettings } from '../types';
 import { deleteTransaction, formatCurrency, formatDate, clearOnlyTransactions, syncCurrentDataToCloud } from '../utils/storage';
@@ -48,6 +49,7 @@ interface TransactionsViewProps {
   onOpenExport: () => void;
   onOpenBankStatement?: () => void;
   onOpenSyncVerify?: () => void;
+  onNavigateToReports?: () => void;
   onRefresh: () => void;
 }
 
@@ -62,6 +64,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onOpenExport,
   onOpenBankStatement,
   onOpenSyncVerify,
+  onNavigateToReports,
   onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -247,6 +250,17 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
             <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>Importar CSV</span>
           </button>
+
+          {onNavigateToReports && (
+            <button
+              onClick={onNavigateToReports}
+              className="px-3.5 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
+              title="Abrir Informes Estadísticos Interactivos"
+            >
+              <BarChart3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span className="hidden sm:inline">Informes</span>
+            </button>
+          )}
 
           <button
             onClick={onOpenExport}

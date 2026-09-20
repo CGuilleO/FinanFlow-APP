@@ -27,6 +27,7 @@ import {
   Mail,
   ShieldCheck,
   Users,
+  BarChart3,
 } from 'lucide-react';
 import { Account, BillReminder, Category, FinancialHealthAnalysis, Transaction, UserSettings, UserSession } from './types';
 import { APP_VERSION, BUILD_DATE } from './version';
@@ -58,6 +59,7 @@ import { BudgetsCategoriesView } from './components/BudgetsCategoriesView';
 import { BillsRemindersView } from './components/BillsRemindersView';
 import { AIAdvisorView } from './components/AIAdvisorView';
 import { SettingsView } from './components/SettingsView';
+import { ReportsView } from './components/ReportsView';
 import { PrivacyPolicyView } from './components/Legal/PrivacyPolicyView';
 import { TermsOfServiceView } from './components/Legal/TermsOfServiceView';
 
@@ -120,7 +122,7 @@ export default function App() {
   }, []);
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'budgets' | 'bills' | 'advisor' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'reports' | 'budgets' | 'bills' | 'advisor' | 'settings'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [initialTagFilter, setInitialTagFilter] = useState<string | undefined>(undefined);
 
@@ -384,6 +386,7 @@ export default function App() {
   const navItems = [
     { id: 'dashboard', label: 'Panel Principal', icon: LayoutDashboard },
     { id: 'transactions', label: 'Movimientos', icon: ReceiptText, count: transactions.length },
+    { id: 'reports', label: 'Informes Estadísticos', icon: BarChart3, highlightBadge: 'Pro' },
     { id: 'budgets', label: 'Presupuestos & Cuentas', icon: PieChart },
     { id: 'bills', label: 'Facturas & Alarmas', icon: BellRing, badge: bills.filter(b => b.status === 'pending').length },
     { id: 'advisor', label: 'Asesor IA & Ahorro', icon: Sparkles, highlight: true },
@@ -1110,6 +1113,7 @@ export default function App() {
               onNavigateToBudgets={() => setActiveTab('budgets')}
               onNavigateToBills={() => setActiveTab('bills')}
               onNavigateToAdvisor={() => setActiveTab('advisor')}
+              onNavigateToReports={() => setActiveTab('reports')}
               onRefreshData={refreshAllData}
             />
           )}
@@ -1126,7 +1130,19 @@ export default function App() {
               onOpenExport={() => setIsImportExportModalOpen(true)}
               onOpenBankStatement={() => setIsBankStatementModalOpen(true)}
               onOpenSyncVerify={() => setIsDeviceSyncModalOpen(true)}
+              onNavigateToReports={() => setActiveTab('reports')}
               onRefresh={refreshAllData}
+            />
+          )}
+
+          {activeTab === 'reports' && (
+            <ReportsView
+              transactions={transactions}
+              categories={categories}
+              accounts={accounts}
+              settings={settings}
+              onNavigateToTransactions={handleNavigateToTransactions}
+              onOpenNewTransaction={handleOpenNewTx}
             />
           )}
 

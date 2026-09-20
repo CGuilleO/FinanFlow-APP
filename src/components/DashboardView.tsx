@@ -26,7 +26,8 @@ import {
   Mail,
   HandCoins,
   Bell,
-  Building2
+  Building2,
+  BarChart3,
 } from 'lucide-react';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../types';
 import { formatCurrency, formatDate } from '../utils/storage';
@@ -51,6 +52,7 @@ interface DashboardViewProps {
   onNavigateToBudgets: () => void;
   onNavigateToBills: () => void;
   onNavigateToAdvisor: () => void;
+  onNavigateToReports?: () => void;
   onRefreshData?: () => void;
 }
 
@@ -71,6 +73,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToBudgets,
   onNavigateToBills,
   onNavigateToAdvisor,
+  onNavigateToReports,
   onRefreshData,
 }) => {
   const [drilldownType, setDrilldownType] = useState<DrilldownType | null>(null);
@@ -545,7 +548,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 4. Charts Row */}
+      {/* 4. Charts Header with shortcut to Reports */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+            Análisis y Estadísticas Visuales
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Distribución de gastos y evolución mensual
+          </p>
+        </div>
+        {onNavigateToReports && (
+          <button
+            onClick={onNavigateToReports}
+            className="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Sesión de Informes</span>
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Donut Categories (2 cols) */}
         <div
