@@ -28,6 +28,7 @@ import {
   Bell,
   Building2,
   BarChart3,
+  ReceiptText,
 } from 'lucide-react';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../types';
 import { formatCurrency, formatDate } from '../utils/storage';
@@ -103,6 +104,93 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
   }, [transactions]);
+
+  // Find the most recently captured / recorded transaction (by createdAt, updatedAt or date)
+  const latestCapturedTxInfo = useMemo(() => {
+    if (!transactions || transactions.length === 0) return null;
+
+    const sortedByCapture = [...transactions].sort((a, b) => {
+      const getTime = (tx: Transaction) => {
+        if (tx.createdAt) {
+          const t = new Date(tx.createdAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (tx.updatedAt) {
+          const t = new Date(tx.updatedAt).getTime();
+          if (!isNaN(t) && t > 0) return t;
+        }
+        if (tx.date) {
+          const t = new Date(tx.date + 'T12:00:00').getTime();
+          if (!isNaN(t)) return t;
+        }
+        return 0;
+      };
+      return getTime(b) - getTime(a);
+    });
+
+    const latest = sortedByCapture[0];
+    if (!latest) return null;
+
+    const cat = categoryMap.get(latest.categoryId);
+    const acc = accountMap.get(latest.accountId);
+
+    return {
+      tx: latest,
+      category: cat,
+      account: acc,
+    };
+  }, [transactions, categoryMap, accountMap]);
+
+  // Formatted date and time of capture
+  const captureDateTimeString = useMemo(() => {
+    if (!latestCapturedTxInfo?.tx) {
+      return { date: '', time: '', full: 'Sin registros', displayLabel: 'Sin registros', isToday: false };
+    }
+    const tx = latestCapturedTxInfo.tx;
+    const raw = tx.createdAt || tx.date;
+    try {
+      const d = new Date(raw.includes('T') ? raw : `${raw}T12:00:00`);
+      if (isNaN(d.getTime())) {
+        return { date: tx.date || raw, time: '', full: tx.date || raw, displayLabel: tx.date || raw, isToday: false };
+      }
+
+      const formattedDate = new Intl.DateTimeFormat('es-CO', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }).format(d);
+
+      const hasExplicitTime = raw.includes('T') || raw.includes(':');
+      const formattedTime = hasExplicitTime
+        ? new Intl.DateTimeFormat('es-CO', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          }).format(d)
+        : '';
+
+      const now = new Date();
+      const isToday =
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+
+      const full = formattedTime ? `${formattedDate}, ${formattedTime}` : formattedDate;
+      const displayLabel = isToday
+        ? `Hoy${formattedTime ? ` • ${formattedTime}` : ''}`
+        : full;
+
+      return {
+        date: formattedDate,
+        time: formattedTime,
+        full,
+        displayLabel,
+        isToday,
+      };
+    } catch {
+      return { date: tx.date || '', time: '', full: tx.date || '', displayLabel: tx.date || '', isToday: false };
+    }
+  }, [latestCapturedTxInfo]);
 
   // Current month totals
   const currentMonthTxs = useMemo(() => {
@@ -366,8 +454,100 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {/* 3. Executive Financial Metrics Cards (ALL INTERACTIVE WITH DRILLDOWNS & COMPARISON) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Ingresos del Mes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* Card 1: Total de Movimientos y Último Movimiento Guardado con Fecha y Hora de Captura */}
+        <div
+          id="card-total-and-latest-movement"
+          onClick={() => onNavigateToTransactions()}
+          className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500/60 dark:hover:border-indigo-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between"
+          title="Toca para ver todos los movimientos registrados"
+        >
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Total & Último Registro
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <ReceiptText className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* Total de movimientos */}
+            <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white flex items-baseline gap-1.5">
+              <span>{transactions.length.toLocaleString('es-CO')}</span>
+              <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                movimientos
+              </span>
+            </div>
+
+            {/* Subtítulo / Bloque del último dato guardado */}
+            {latestCapturedTxInfo?.tx ? (
+              <div className="mt-2.5 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-800/80 space-y-1.5">
+                <div className="flex items-center justify-between gap-1 text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                  <span>Último dato guardado</span>
+                  {captureDateTimeString.isToday && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-extrabold text-[9px] uppercase">
+                      Hoy
+                    </span>
+                  )}
+                </div>
+
+                {/* Concepto y Monto */}
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className="text-xs font-bold text-slate-900 dark:text-white truncate"
+                    title={latestCapturedTxInfo.tx.description}
+                  >
+                    {latestCapturedTxInfo.tx.description || 'Sin concepto'}
+                  </span>
+                  <span
+                    className={`text-xs font-black shrink-0 ${
+                      latestCapturedTxInfo.tx.type === 'expense'
+                        ? 'text-rose-600 dark:text-rose-400'
+                        : latestCapturedTxInfo.tx.type === 'income'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-indigo-600 dark:text-indigo-400'
+                    }`}
+                  >
+                    {latestCapturedTxInfo.tx.type === 'expense' ? '-' : '+'}
+                    {formatCurrency(latestCapturedTxInfo.tx.amount, settings)}
+                  </span>
+                </div>
+
+                {/* Fecha y Hora exacta de captura */}
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-0.5 border-t border-slate-200/50 dark:border-slate-700/50">
+                  <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300 truncate">
+                    <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
+                    <span title={`Fecha y hora de captura: ${captureDateTimeString.full}`}>
+                      {captureDateTimeString.displayLabel}
+                    </span>
+                  </span>
+                  {latestCapturedTxInfo.category && (
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[80px]">
+                      {latestCapturedTxInfo.category.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-200 dark:border-slate-700 text-center">
+                <span className="text-xs text-slate-400">Sin movimientos guardados aún</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Registro activo
+            </span>
+            <span className="text-[10px] font-bold text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center gap-0.5 transition-colors">
+              Explorar <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Ingresos del Mes */}
         <div
           onClick={() => openDrilldown('income')}
           className="group p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/60 dark:hover:border-emerald-500/60 rounded-3xl shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between"
