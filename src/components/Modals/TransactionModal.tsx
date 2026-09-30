@@ -5,7 +5,18 @@ import {
   Upload, FileText, FileCheck, Eye, Trash2, Lightbulb, CheckCircle2, ChevronDown, Download
 } from 'lucide-react';
 import { Account, Category, Transaction, TransactionType, UserSettings, LoanDetails } from '../../types';
-import { addTransaction, formatCurrency, updateTransaction, addBillReminder, updateBillReminder, getStoredTransactions } from '../../utils/storage';
+import {
+  addTransaction,
+  formatCurrency,
+  formatDate,
+  updateTransaction,
+  addBillReminder,
+  updateBillReminder,
+  deleteBillReminder,
+  getStoredTransactions,
+  getDaysUntil,
+  sendBrowserNotification
+} from '../../utils/storage';
 import { isUtilitiesCategory } from '../../utils/constants';
 import confetti from 'canvas-confetti';
 
@@ -77,6 +88,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   });
   const [lenderOrBorrower, setLenderOrBorrower] = useState('');
 
+  // Future Scheduled Expense Sub-State (2 days before notice)
+  const [enableFutureReminder, setEnableFutureReminder] = useState<boolean>(true);
+  const [futureReminderDaysBefore, setFutureReminderDaysBefore] = useState<number>(2);
+
   useEffect(() => {
     if (transactionToEdit) {
       setType(transactionToEdit.type);
@@ -91,6 +106,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setIsRecurring(!!transactionToEdit.isRecurring);
       setRecurringFrequency(transactionToEdit.recurringFrequency || 'monthly');
       setManuallySelectedCategory(true);
+      setEnableFutureReminder(transactionToEdit.isScheduledFutureExpense !== false);
+      setFutureReminderDaysBefore(transactionToEdit.reminderDaysBefore || 2);
 
       // Restore proof/receipt if exists
       setReceiptImage(transactionToEdit.receiptImage || '');
@@ -144,6 +161,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setReceiptFileName('');
       setReceiptFileType('');
       setReceiptFileSize(0);
+      setEnableFutureReminder(true);
+      setFutureReminderDaysBefore(2);
     }
     setError(null);
   }, [transactionToEdit, isOpen, categories, accounts]);
@@ -153,6 +172,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const isUtilitiesSelected = useMemo(() => {
     return type === 'expense' && isUtilitiesCategory(selectedCategory);
   }, [type, selectedCategory]);
+
+  // Future Expense & 2-Day Alert Calculations
+  const daysUntilDate = useMemo(() => getDaysUntil(date), [date]);
+  const isFutureExpense = useMemo(() => type === 'expense' && daysUntilDate > 0, [type, daysUntilDate]);
+  const alertDatePreview = useMemo(() => {
+    try {
+      const d = new Date(date + 'T00:00:00');
+      d.setDate(d.getDate() - (futureReminderDaysBefore || 2));
+      return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+      return '2 días antes';
+    }
+  }, [date, futureReminderDaysBefore]);
 
   // Historical tags used in all transactions (sorted by frequency)
   const historicalTags = useMemo(() => {
@@ -554,6 +586,41 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     };
 
     if (transactionToEdit) {
+      let linkedBillId = transactionToEdit.linkedBillReminderId;
+      if (isFutureExpense && enableFutureReminder) {
+        if (linkedBillId) {
+          updateBillReminder(linkedBillId, {
+            title: `Gasto Programado: ${description.trim()}`,
+            amount,
+            dueDate: date,
+            categoryId: type === 'transfer' ? 'cat-transfer' : categoryId,
+            accountId,
+            reminderDaysBefore: futureReminderDaysBefore,
+            notes: `Alerta automática ${futureReminderDaysBefore} días antes de la fecha de pago (${formatDate(date)}).`,
+          });
+        } else {
+          const newBill = addBillReminder({
+            title: `Gasto Programado: ${description.trim()}`,
+            amount,
+            dueDate: date,
+            categoryId: type === 'transfer' ? 'cat-transfer' : categoryId,
+            accountId,
+            isRecurring: isRecurring,
+            frequency: isRecurring ? recurringFrequency : 'monthly',
+            reminderDaysBefore: futureReminderDaysBefore,
+            notes: `Alerta automática ${futureReminderDaysBefore} días antes de la fecha de pago (${formatDate(date)}).`,
+            isScheduledExpenseReminder: true,
+            scheduledTransactionId: transactionToEdit.id,
+          });
+          linkedBillId = newBill.id;
+        }
+      } else if (linkedBillId && (!isFutureExpense || !enableFutureReminder)) {
+        try {
+          deleteBillReminder(linkedBillId);
+          linkedBillId = undefined;
+        } catch {}
+      }
+
       updateTransaction(transactionToEdit.id, {
         type,
         amount,
@@ -567,10 +634,30 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         isRecurring,
         recurringFrequency: isRecurring ? recurringFrequency : undefined,
         isLoanIncome: false,
+        isScheduledFutureExpense: isFutureExpense && enableFutureReminder,
+        reminderDaysBefore: isFutureExpense && enableFutureReminder ? futureReminderDaysBefore : undefined,
+        linkedBillReminderId: linkedBillId,
         ...receiptPayload,
       });
     } else {
-      addTransaction({
+      let linkedBillId: string | undefined = undefined;
+      if (isFutureExpense && enableFutureReminder) {
+        const newBill = addBillReminder({
+          title: `Gasto Programado: ${description.trim()}`,
+          amount,
+          dueDate: date,
+          categoryId: type === 'transfer' ? 'cat-transfer' : categoryId,
+          accountId,
+          isRecurring: isRecurring,
+          frequency: isRecurring ? recurringFrequency : 'monthly',
+          reminderDaysBefore: futureReminderDaysBefore,
+          notes: `Alerta automática ${futureReminderDaysBefore} días antes de la fecha de pago (${formatDate(date)}).`,
+          isScheduledExpenseReminder: true,
+        });
+        linkedBillId = newBill.id;
+      }
+
+      const newTx = addTransaction({
         type,
         amount,
         description: description.trim(),
@@ -578,20 +665,41 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         categoryId: type === 'transfer' ? 'cat-transfer' : categoryId,
         accountId,
         toAccountId: type === 'transfer' ? toAccountId : undefined,
-        tags,
+        tags: isFutureExpense ? (tags.includes('programado') ? tags : [...tags, 'programado']) : tags,
         notes: notes.trim(),
         isRecurring,
         recurringFrequency: isRecurring ? recurringFrequency : undefined,
         source: 'manual',
         isLoanIncome: false,
+        isScheduledFutureExpense: isFutureExpense && enableFutureReminder,
+        reminderDaysBefore: isFutureExpense && enableFutureReminder ? futureReminderDaysBefore : undefined,
+        linkedBillReminderId: linkedBillId,
         ...receiptPayload,
       });
+
+      if (linkedBillId) {
+        updateBillReminder(linkedBillId, {
+          scheduledTransactionId: newTx.id,
+        });
+      }
+
+      // If the future expense date is within 2 days right now, show browser notification
+      if (isFutureExpense && enableFutureReminder && daysUntilDate <= futureReminderDaysBefore) {
+        sendBrowserNotification(
+          `FinanFlow: Aviso de Pago en ${daysUntilDate === 0 ? 'hoy' : daysUntilDate === 1 ? 'mañana' : `${daysUntilDate} días`}`,
+          `Gasto programado "${description.trim()}" por ${formatCurrency(amount, settings)} vence el ${formatDate(date)}.`
+        );
+      }
 
       confetti({
         particleCount: 40,
         spread: 60,
         origin: { y: 0.7 },
       });
+    }
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
     }
 
     onSuccess();
@@ -1044,6 +1152,60 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Future Expense 2-Day Notice Badge & Option */}
+          {isFutureExpense && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200 space-y-2.5 animate-in fade-in slide-in-from-top-1 shadow-sm">
+              <div className="flex items-start gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500 text-white shadow-sm mt-0.5 shrink-0">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between flex-wrap gap-1.5">
+                    <span className="text-xs font-bold flex items-center gap-1.5 text-amber-950 dark:text-amber-100">
+                      📅 Gasto Programado: Pago el {formatDate(date)}
+                    </span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200">
+                      Faltan {daysUntilDate} {daysUntilDate === 1 ? 'día' : 'días'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-900 dark:text-amber-300 leading-relaxed">
+                    🔔 <strong>Aviso automático activo:</strong> FinanFlow te mostrará un aviso destacado en tu <strong>Panel de Control</strong> y en <strong>Facturas & Alarmas</strong> exactamente <strong>2 días antes de la fecha de pago ({alertDatePreview})</strong> para que tengas el dinero listo y no olvides realizar el pago.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-amber-200/80 dark:border-amber-800/80 flex items-center justify-between flex-wrap gap-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={enableFutureReminder}
+                    onChange={(e) => setEnableFutureReminder(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-amber-400"
+                  />
+                  <span className="text-xs font-semibold text-amber-950 dark:text-amber-100">
+                    Activar recordatorio y alarma de pago
+                  </span>
+                </label>
+
+                {enableFutureReminder && (
+                  <div className="flex items-center gap-1.5 text-xs text-amber-900 dark:text-amber-300 font-medium">
+                    <span>Avisar:</span>
+                    <select
+                      value={futureReminderDaysBefore}
+                      onChange={(e) => setFutureReminderDaysBefore(Number(e.target.value))}
+                      className="px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg text-amber-950 dark:text-amber-100 font-bold focus:ring-1 focus:ring-amber-500 focus:outline-none"
+                    >
+                      <option value={1}>1 día antes</option>
+                      <option value={2}>2 días antes (Recomendado)</option>
+                      <option value={3}>3 días antes</option>
+                      <option value={5}>5 días antes</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Account Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

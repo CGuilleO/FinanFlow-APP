@@ -33,7 +33,15 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { Account, Category, Transaction, UserSettings } from '../types';
-import { deleteTransaction, formatCurrency, formatDate, clearOnlyTransactions, syncCurrentDataToCloud } from '../utils/storage';
+import {
+  deleteTransaction,
+  formatCurrency,
+  formatDate,
+  clearOnlyTransactions,
+  syncCurrentDataToCloud,
+  getFutureExpenseAlertStatus,
+  getDaysUntil
+} from '../utils/storage';
 import { IconRenderer } from './IconRenderer';
 import { SmartCSVImportModal } from './Modals/SmartCSVImportModal';
 import { BankStatementExtractorModal } from './Modals/BankStatementExtractorModal';
@@ -68,7 +76,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState<'all' | 'expense' | 'income' | 'transfer'>('all');
+  const [selectedType, setSelectedType] = useState<'all' | 'expense' | 'income' | 'transfer' | 'scheduled'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>(initialTagFilter || 'all');
@@ -144,7 +152,13 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
       }
 
       // Type
-      if (selectedType !== 'all' && t.type !== selectedType) return false;
+      if (selectedType === 'scheduled') {
+        if (t.type !== 'expense') return false;
+        const diff = getDaysUntil(t.date);
+        if (diff <= 0 && !t.isScheduledFutureExpense) return false;
+      } else if (selectedType !== 'all' && t.type !== selectedType) {
+        return false;
+      }
 
       // Category
       if (selectedCategory !== 'all' && t.categoryId !== selectedCategory) return false;
@@ -413,18 +427,26 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
           </div>
 
           {/* Type Filter Pills */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-            {(['all', 'expense', 'income', 'transfer'] as const).map((t) => (
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex-wrap gap-0.5">
+            {(['all', 'expense', 'income', 'transfer', 'scheduled'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setSelectedType(t)}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
+                className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg capitalize transition-all whitespace-nowrap text-center ${
                   selectedType === t
-                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm font-bold'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-900'
                 }`}
               >
-                {t === 'all' ? 'Todos' : t === 'expense' ? 'Gastos' : t === 'income' ? 'Ingresos' : 'Transf.'}
+                {t === 'all'
+                  ? 'Todos'
+                  : t === 'expense'
+                  ? 'Gastos'
+                  : t === 'income'
+                  ? 'Ingresos'
+                  : t === 'transfer'
+                  ? 'Transf.'
+                  : '⏳ Programados'}
               </button>
             ))}
           </div>
@@ -623,6 +645,25 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         <span>•</span>
                         <span>{isTransfer ? `${acc?.name} ➔ ${toAcc?.name}` : acc?.name}</span>
                       </div>
+
+                      {/* Scheduled Future Expense Notice (Aviso 2 días antes de la fecha de pago) */}
+                      {tx.type === 'expense' && (() => {
+                        const status = getFutureExpenseAlertStatus(tx.date, tx.reminderDaysBefore || 2, tx.isPaid);
+                        if (!status.isFuture && !status.isOverdue) return null;
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${status.badgeClass}`}>
+                              <Bell className="w-3 h-3" />
+                              {status.label}
+                            </span>
+                            {status.isAlertActive && !status.isDueToday && !status.isOverdue && (
+                              <span className="text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                                (Alerta de pago programada para el {formatDate(tx.date)})
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {tx.notes && (
                         <p className="text-[11px] text-slate-400 dark:text-slate-500 italic">

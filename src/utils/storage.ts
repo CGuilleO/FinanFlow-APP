@@ -227,6 +227,12 @@ export function updateTransaction(id: string, updates: Partial<Transaction>): Tr
 
 export function deleteTransaction(id: string): boolean {
   const all = getStoredTransactions();
+  const txToDelete = all.find((t) => t.id === id);
+  if (txToDelete?.linkedBillReminderId) {
+    try {
+      deleteBillReminder(txToDelete.linkedBillReminderId);
+    } catch {}
+  }
   const filtered = all.filter((t) => t.id !== id);
   if (filtered.length !== all.length) {
     saveStoredTransactions(filtered);
@@ -757,3 +763,99 @@ export function applyCloudDataLocally(cloudData: CloudUserData) {
     console.error('Error applying cloud data locally', e);
   }
 }
+
+// 10. Future Scheduled Expenses & 2-Day Notice Helpers
+export function getDaysUntil(dateStr: string): number {
+  if (!dateStr) return 0;
+  const target = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffMs = target.getTime() - today.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+export interface FutureExpenseAlert {
+  isFuture: boolean;
+  diffDays: number;
+  isAlertActive: boolean; // True when diffDays <= reminderDays (e.g. <= 2 days before)
+  isDueToday: boolean;
+  isDueTomorrow: boolean;
+  isDueInTwoDays: boolean;
+  isOverdue: boolean;
+  label: string;
+  badgeClass: string;
+}
+
+export function getFutureExpenseAlertStatus(dateStr: string, reminderDaysBefore: number = 2, isPaid: boolean = false): FutureExpenseAlert {
+  if (isPaid) {
+    return {
+      isFuture: false,
+      diffDays: 0,
+      isAlertActive: false,
+      isDueToday: false,
+      isDueTomorrow: false,
+      isDueInTwoDays: false,
+      isOverdue: false,
+      label: 'Pagado',
+      badgeClass: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+    };
+  }
+
+  const diffDays = getDaysUntil(dateStr);
+  const isOverdue = diffDays < 0;
+  const isDueToday = diffDays === 0;
+  const isDueTomorrow = diffDays === 1;
+  const isDueInTwoDays = diffDays === 2;
+  const isFuture = diffDays > 0;
+  const isAlertActive = isDueToday || isDueTomorrow || isDueInTwoDays || isOverdue;
+
+  let label = '';
+  let badgeClass = '';
+
+  if (isOverdue) {
+    label = `Vencido hace ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'día' : 'días'}`;
+    badgeClass = 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 animate-pulse';
+  } else if (isDueToday) {
+    label = '🚨 Pago programado para HOY';
+    badgeClass = 'bg-rose-500 text-white font-black shadow-sm shadow-rose-500/20';
+  } else if (isDueTomorrow) {
+    label = '⚠️ Aviso: Pago programado MAÑANA';
+    badgeClass = 'bg-amber-500 text-white font-bold shadow-sm shadow-amber-500/20';
+  } else if (isDueInTwoDays) {
+    label = '🔔 Aviso: Pago en 2 días';
+    badgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold';
+  } else if (diffDays <= reminderDaysBefore) {
+    label = `🔔 Aviso: Pago en ${diffDays} días`;
+    badgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold';
+  } else {
+    label = `⏳ Programado en ${diffDays} días`;
+    badgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700';
+  }
+
+  return {
+    isFuture,
+    diffDays,
+    isAlertActive,
+    isDueToday,
+    isDueTomorrow,
+    isDueInTwoDays,
+    isOverdue,
+    label,
+    badgeClass,
+  };
+}
+
+export function sendBrowserNotification(title: string, body: string, tag?: string) {
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(title, {
+        body,
+        icon: '/icon-192.png',
+        tag: tag || 'finanflow-reminder',
+      });
+    } catch (e) {
+      console.warn('Could not trigger Notification', e);
+    }
+  }
+}
+

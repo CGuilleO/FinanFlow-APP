@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { Clock, Plus, CheckCircle2, AlertTriangle, Calendar, Bell, Trash2, Edit2, X, Check, CreditCard, Layers, HandCoins, Coins, History } from 'lucide-react';
 import { Account, BillReminder, Category, UserSettings, Transaction } from '../types';
-import { addBillReminder, deleteBillReminder, formatCurrency, formatDate, updateBillReminder, addTransaction } from '../utils/storage';
+import {
+  addBillReminder,
+  deleteBillReminder,
+  formatCurrency,
+  formatDate,
+  updateBillReminder,
+  addTransaction,
+  updateTransaction
+} from '../utils/storage';
 import { IconRenderer } from './IconRenderer';
 import { LoanPaymentModal } from './Modals/LoanPaymentModal';
 import { extractLoanFinancials } from '../utils/loanHelpers';
@@ -37,8 +45,8 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
   const [categoryId, setCategoryId] = useState('');
   const [accountId, setAccountId] = useState('');
   const [isRecurring, setIsRecurring] = useState(true);
-  const [frequency, setFrequency] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
-  const [reminderDaysBefore, setReminderDaysBefore] = useState(3);
+  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [reminderDaysBefore, setReminderDaysBefore] = useState(2);
 
   const categoryMap = new Map<string, Category>(categories.map((c) => [c.id, c]));
   const accountMap = new Map<string, Account>(accounts.map((a) => [a.id, a]));
@@ -116,18 +124,23 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
     // 1. Mark regular bill status as paid
     updateBillReminder(bill.id, { status: 'paid' });
 
-    // 2. Automatically record transaction
-    addTransaction({
-      type: 'expense',
-      amount: bill.amount,
-      description: `Pago de Factura: ${bill.title}`,
-      date: new Date().toISOString().split('T')[0],
-      categoryId: bill.categoryId,
-      accountId: bill.accountId || accounts[0]?.id || 'acc-1',
-      tags: ['factura', 'recurrente', 'servicios'],
-      notes: `Pago automático registrado desde Recordatorios de Facturas`,
-      source: 'manual',
-    });
+    // 2. If this reminder was linked to an existing scheduled future expense, mark it as paid
+    if (bill.scheduledTransactionId) {
+      updateTransaction(bill.scheduledTransactionId, { isPaid: true });
+    } else {
+      // Otherwise record automatic payment transaction
+      addTransaction({
+        type: 'expense',
+        amount: bill.amount,
+        description: `Pago de Factura: ${bill.title}`,
+        date: new Date().toISOString().split('T')[0],
+        categoryId: bill.categoryId,
+        accountId: bill.accountId || accounts[0]?.id || 'acc-1',
+        tags: ['factura', 'recurrente', 'servicios'],
+        notes: `Pago automático registrado desde Recordatorios de Facturas`,
+        source: 'manual',
+      });
+    }
 
     confetti({ particleCount: 45, spread: 60 });
     onRefresh();
@@ -219,6 +232,11 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                         {bill.isLoanReminder && (
                           <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-0.5">
                             <HandCoins className="w-2.5 h-2.5" /> Préstamo
+                          </span>
+                        )}
+                        {bill.isScheduledExpenseReminder && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-black uppercase rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-0.5">
+                            <Bell className="w-2.5 h-2.5 text-amber-600" /> Gasto Programado (Aviso 2 días antes)
                           </span>
                         )}
                       </h3>
@@ -320,7 +338,13 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                       isPaid
                         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
                         : isOverdue
-                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 animate-pulse'
+                        : diffDays === 0
+                        ? 'bg-rose-500 text-white font-black shadow-sm'
+                        : diffDays === 1
+                        ? 'bg-amber-500 text-white font-black shadow-sm'
+                        : diffDays === 2
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-700 font-black'
                         : isDueSoon
                         ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
                         : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
@@ -330,8 +354,12 @@ export const BillsRemindersView: React.FC<BillsRemindersViewProps> = ({
                       ? '✓ Liquidado'
                       : isOverdue
                       ? `¡Vencido hace ${Math.abs(diffDays)} días!`
-                      : isDueSoon
-                      ? `¡Vence en ${diffDays} día(s)!`
+                      : diffDays === 0
+                      ? '🚨 ¡Aviso: Pago HOY!'
+                      : diffDays === 1
+                      ? '⚠️ ¡Aviso: Pago MAÑANA!'
+                      : diffDays === 2
+                      ? '🔔 ¡Aviso: Pago en 2 días!'
                       : `Programado (${diffDays} días)`}
                   </span>
 

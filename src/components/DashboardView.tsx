@@ -29,9 +29,17 @@ import {
   Building2,
   BarChart3,
   ReceiptText,
+  CheckCircle2,
 } from 'lucide-react';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../types';
-import { formatCurrency, formatDate } from '../utils/storage';
+import {
+  formatCurrency,
+  formatDate,
+  getFutureExpenseAlertStatus,
+  getDaysUntil,
+  updateTransaction,
+  updateBillReminder
+} from '../utils/storage';
 import { CategoryDonutChart, IncomeExpenseBarChart, WeeklySpendingChart } from './Charts/CustomCharts';
 import { IconRenderer } from './IconRenderer';
 import { DashboardDrilldownModal, DrilldownType } from './Modals/DashboardDrilldownModal';
@@ -259,12 +267,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     })
     .filter((c) => c.pct >= settings.budgetAlertThreshold);
 
-  // Upcoming bills due in next 5 days or overdue
-  const upcomingBills = bills.filter((b) => {
-    if (b.status === 'paid') return false;
-    const diffDays = Math.ceil((new Date(b.dueDate).getTime() - today.getTime()) / (1000 * 3600 * 24));
-    return diffDays <= 5;
-  });
+  // Scheduled Future Expenses (Gastos con fecha futura que están a 2 días de pago o en ventana de aviso)
+  const scheduledFutureExpenses = useMemo(() => {
+    return transactions
+      .filter((t) => {
+        if (t.type !== 'expense' || t.isPaid) return false;
+        const diffDays = getDaysUntil(t.date);
+        // Show if within 2 days (diffDays <= 2), today (0), tomorrow (1), or overdue (< 0)
+        return diffDays <= (t.reminderDaysBefore || 2);
+      })
+      .map((t) => {
+        const status = getFutureExpenseAlertStatus(t.date, t.reminderDaysBefore || 2, t.isPaid);
+        return {
+          tx: t,
+          status,
+        };
+      })
+      .sort((a, b) => a.status.diffDays - b.status.diffDays);
+  }, [transactions]);
+
+  // Set of linked bill IDs to prevent duplicate alerts
+  const linkedBillIds = useMemo(() => {
+    const ids = new Set<string>();
+    transactions.forEach((t) => {
+      if (t.linkedBillReminderId) ids.add(t.linkedBillReminderId);
+    });
+    return ids;
+  }, [transactions]);
+
+  // Upcoming bills due in next 5 days or overdue (excluding ones already shown via scheduledFutureExpenses)
+  const upcomingBills = useMemo(() => {
+    return bills.filter((b) => {
+      if (b.status === 'paid') return false;
+      if (linkedBillIds.has(b.id) || b.isScheduledExpenseReminder) return false;
+      const diffDays = Math.ceil((new Date(b.dueDate).getTime() - today.getTime()) / (1000 * 3600 * 24));
+      return diffDays <= (b.reminderDaysBefore || 5);
+    });
+  }, [bills, linkedBillIds, today]);
 
   // Filtered recent transactions for in-place dashboard view
   const filteredRecentTxs = useMemo(() => {
@@ -368,8 +407,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 2. Critical Alerts Section (Budget Exceeded / Upcoming Bills) */}
-      {(overBudgetCategories.length > 0 || upcomingBills.length > 0) && (
+      {/* 2. Critical Alerts Section (Budget Exceeded / Future Expense 2-Day Notices / Upcoming Bills) */}
+      {(overBudgetCategories.length > 0 || scheduledFutureExpenses.length > 0 || upcomingBills.length > 0) && (
         <div className="space-y-3">
           {/* Overbudget warnings */}
           {overBudgetCategories.map((cat) => (
@@ -402,6 +441,83 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
             </div>
           ))}
+
+          {/* Scheduled Future Expenses (Aviso de Pago 2 Días Antes) */}
+          {scheduledFutureExpenses.map(({ tx, status }) => {
+            const cat = categoryMap.get(tx.categoryId);
+            const acc = accountMap.get(tx.accountId);
+            return (
+              <div
+                key={`future-tx-${tx.id}`}
+                className={`p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all border shadow-sm ${
+                  status.isDueToday
+                    ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-950 dark:text-rose-200'
+                    : status.isDueTomorrow
+                    ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-950 dark:text-amber-200'
+                    : status.isDueInTwoDays
+                    ? 'bg-amber-50/90 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+                    : 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`p-2.5 rounded-xl text-white shadow-sm shrink-0 ${
+                      status.isDueToday ? 'bg-rose-600 animate-pulse' : 'bg-amber-500'
+                    }`}
+                  >
+                    <Bell className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span
+                        className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-md ${
+                          status.isDueToday
+                            ? 'bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100'
+                            : 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
+                        }`}
+                      >
+                        {status.label}
+                      </span>
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        {tx.description}
+                      </span>
+                    </div>
+                    <p className="text-[11px] opacity-85">
+                      Fecha de pago: <strong>{formatDate(tx.date)}</strong> • Monto: <strong>{formatCurrency(tx.amount, settings)}</strong>
+                      {acc ? ` • Cuenta: ${acc.name}` : ''}
+                      {cat ? ` • Categoría: ${cat.name}` : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      updateTransaction(tx.id, { isPaid: true });
+                      if (tx.linkedBillReminderId) {
+                        updateBillReminder(tx.linkedBillReminderId, { status: 'paid' });
+                      }
+                      if (onRefreshData) onRefreshData();
+                    }}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                    title="Marcar este gasto programado como pagado"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Marcar Pagado
+                  </button>
+                  {onEditTransaction && (
+                    <button
+                      onClick={() => onEditTransaction(tx)}
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 shadow-sm transition-all cursor-pointer"
+                    >
+                      Editar Gasto
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
           {/* Upcoming bills alerts & Loan payment alerts */}
           {upcomingBills.map((bill) => {

@@ -49,6 +49,9 @@ import {
   subscribeToStore,
   syncCurrentDataToCloud,
   getEffectiveUserId,
+  getDaysUntil,
+  sendBrowserNotification,
+  formatDate,
 } from './utils/storage';
 import { subscribeToUserCloudData, fetchUserCloudData, pushUserCloudData } from './lib/firebase';
 
@@ -383,12 +386,44 @@ export default function App() {
     setMobileMenuOpen(false);
   };
 
+  // Compute pending bills + future scheduled expenses in 2-day alert window
+  const pendingAlertsCount = React.useMemo(() => {
+    const pendingBillsCount = bills.filter((b) => b.status === 'pending').length;
+    const futureExpensesActive = transactions.filter((t) => {
+      if (t.type !== 'expense' || t.isPaid) return false;
+      const diff = getDaysUntil(t.date);
+      return diff >= 0 && diff <= (t.reminderDaysBefore || 2);
+    }).length;
+    const linkedCount = transactions.filter((t) => t.linkedBillReminderId && t.type === 'expense' && !t.isPaid).length;
+    return Math.max(pendingBillsCount, pendingBillsCount + futureExpensesActive - linkedCount);
+  }, [bills, transactions]);
+
+  // Periodic and on-load check to trigger browser notification for 2-day payment notices
+  React.useEffect(() => {
+    const activeAlerts = transactions.filter((t) => {
+      if (t.type !== 'expense' || t.isPaid) return false;
+      const diff = getDaysUntil(t.date);
+      return diff >= 0 && diff <= (t.reminderDaysBefore || 2);
+    });
+
+    if (activeAlerts.length > 0) {
+      const first = activeAlerts[0];
+      const diff = getDaysUntil(first.date);
+      const dayText = diff === 0 ? 'HOY' : diff === 1 ? 'MAÑANA' : 'en 2 días';
+      sendBrowserNotification(
+        `FinanFlow: Recordatorio de Pago (${dayText})`,
+        `Tienes un pago programado para "${first.description}" por ${formatCurrency(first.amount, settings)} el ${formatDate(first.date)}.`,
+        `alert-${first.id}`
+      );
+    }
+  }, [transactions, settings]);
+
   const navItems = [
     { id: 'dashboard', label: 'Panel Principal', icon: LayoutDashboard },
     { id: 'transactions', label: 'Movimientos', icon: ReceiptText, count: transactions.length },
     { id: 'reports', label: 'Informes Estadísticos', icon: BarChart3, highlightBadge: 'Pro' },
     { id: 'budgets', label: 'Presupuestos & Cuentas', icon: PieChart },
-    { id: 'bills', label: 'Facturas & Alarmas', icon: BellRing, badge: bills.filter(b => b.status === 'pending').length },
+    { id: 'bills', label: 'Facturas & Alarmas', icon: BellRing, badge: pendingAlertsCount },
     { id: 'advisor', label: 'Asesor IA & Ahorro', icon: Sparkles, highlight: true },
     { id: 'settings', label: 'Configuración', icon: SettingsIcon },
   ];
