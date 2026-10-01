@@ -386,11 +386,13 @@ export default function App() {
     setMobileMenuOpen(false);
   };
 
-  // Compute pending bills + future scheduled expenses in 2-day alert window
+  // Compute pending bills + future scheduled expenses in 2-day alert window (EXCLUSIVAMENTE FECHAS A FUTURO)
   const pendingAlertsCount = React.useMemo(() => {
-    const pendingBillsCount = bills.filter((b) => b.status === 'pending').length;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const pendingBillsCount = bills.filter((b) => b.status === 'pending' && b.dueDate >= todayStr).length;
     const futureExpensesActive = transactions.filter((t) => {
       if (t.type !== 'expense' || t.isPaid) return false;
+      if (!t.date || t.date < todayStr) return false;
       const diff = getDaysUntil(t.date);
       return diff >= 0 && diff <= (t.reminderDaysBefore || 2);
     }).length;
@@ -398,10 +400,12 @@ export default function App() {
     return Math.max(pendingBillsCount, pendingBillsCount + futureExpensesActive - linkedCount);
   }, [bills, transactions]);
 
-  // Periodic and on-load check to trigger browser notification for 2-day payment notices
+  // Periodic and on-load check to trigger browser notification for 2-day payment notices (SOLO FECHAS A FUTURO)
   React.useEffect(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
     const activeAlerts = transactions.filter((t) => {
       if (t.type !== 'expense' || t.isPaid) return false;
+      if (!t.date || t.date < todayStr) return false;
       const diff = getDaysUntil(t.date);
       return diff >= 0 && diff <= (t.reminderDaysBefore || 2);
     });

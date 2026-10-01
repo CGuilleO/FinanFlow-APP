@@ -802,9 +802,10 @@ export function getFutureExpenseAlertStatus(dateStr: string, reminderDaysBefore:
   }
 
   const diffDays = getDaysUntil(dateStr);
+  const todayStr = new Date().toISOString().split('T')[0];
 
-  // Si la fecha ya ocurrió en el pasado, NO es una fecha futura y NO debe generar avisos
-  if (diffDays < 0) {
+  // Si la fecha ya ocurrió en el pasado, NUNCA es una fecha futura y NO debe generar avisos bajo ninguna circunstancia
+  if (!dateStr || dateStr < todayStr || diffDays < 0) {
     return {
       isFuture: false,
       diffDays,

@@ -20,9 +20,9 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Database ID configured for this project
-export const FIRESTORE_DB_ID = 'ai-studio-finanflowinsight-57940131-7500-48b2-9226-2b1063c6630f';
-export const db = getFirestore(app, FIRESTORE_DB_ID);
+// Database ID configured for this project (defaults to '(default)' if not specified in firebaseConfig)
+export const FIRESTORE_DB_ID = (firebaseConfig as any).firestoreDatabaseId || undefined;
+export const db = FIRESTORE_DB_ID ? getFirestore(app, FIRESTORE_DB_ID) : getFirestore(app);
 export const auth = getAuth(app);
 
 /**
@@ -317,7 +317,13 @@ export function subscribeToUserCloudData(userId: string, onData: (data: CloudUse
       } catch (err) {
         // Non-blocking
       }
-    }, () => {});
+    }, (error) => {
+      if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
+        console.info('Firestore operando en modo local/sin conexión temporal.');
+      } else {
+        console.warn('Firestore snapshot listener notice:', error?.message || error);
+      }
+    });
   } catch (err) {
     // Non-blocking
   }

@@ -269,9 +269,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Scheduled Future Expenses (SOLO pagos con fechas a futuro dentro de la ventana de aviso de 2 días)
   const scheduledFutureExpenses = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
     return transactions
       .filter((t) => {
         if (t.type !== 'expense' || t.isPaid) return false;
+        // La fecha debe ser estrictamente hoy o futura (NUNCA en el pasado)
+        if (!t.date || t.date < todayStr) return false;
         const diffDays = getDaysUntil(t.date);
         // Exclusivamente fechas a futuro o hoy (diffDays >= 0) y dentro de la ventana de 2 días
         return diffDays >= 0 && diffDays <= (t.reminderDaysBefore || 2);
@@ -283,7 +286,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           status,
         };
       })
-      .filter((item) => item.status.isAlertActive && item.status.diffDays >= 0)
+      .filter((item) => item.status.isAlertActive && item.status.diffDays >= 0 && item.tx.date >= todayStr)
       .sort((a, b) => a.status.diffDays - b.status.diffDays);
   }, [transactions]);
 
@@ -298,8 +301,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Upcoming bills due in next 5 days (excluding ones already shown via scheduledFutureExpenses, strictly future/due today)
   const upcomingBills = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
     return bills.filter((b) => {
       if (b.status === 'paid') return false;
+      if (!b.dueDate || b.dueDate < todayStr) return false;
       if (linkedBillIds.has(b.id) || b.isScheduledExpenseReminder) return false;
       const diffDays = Math.ceil((new Date(b.dueDate).getTime() - today.getTime()) / (1000 * 3600 * 24));
       return diffDays >= 0 && diffDays <= (b.reminderDaysBefore || 5);
@@ -443,8 +448,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           ))}
 
-          {/* Scheduled Future Expenses (Aviso de Pago 2 Días Antes) */}
+          {/* Scheduled Future Expenses (Aviso de Pago 2 Días Antes - EXCLUSIVAMENTE FECHAS A FUTURO) */}
           {scheduledFutureExpenses.map(({ tx, status }) => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (!status.isAlertActive || status.diffDays < 0 || !tx.date || tx.date < todayStr) {
+              return null;
+            }
             const cat = categoryMap.get(tx.categoryId);
             const acc = accountMap.get(tx.accountId);
             return (
