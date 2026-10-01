@@ -802,20 +802,33 @@ export function getFutureExpenseAlertStatus(dateStr: string, reminderDaysBefore:
   }
 
   const diffDays = getDaysUntil(dateStr);
-  const isOverdue = diffDays < 0;
+
+  // Si la fecha ya ocurrió en el pasado, NO es una fecha futura y NO debe generar avisos
+  if (diffDays < 0) {
+    return {
+      isFuture: false,
+      diffDays,
+      isAlertActive: false,
+      isDueToday: false,
+      isDueTomorrow: false,
+      isDueInTwoDays: false,
+      isOverdue: false,
+      label: '',
+      badgeClass: '',
+    };
+  }
+
   const isDueToday = diffDays === 0;
   const isDueTomorrow = diffDays === 1;
   const isDueInTwoDays = diffDays === 2;
   const isFuture = diffDays > 0;
-  const isAlertActive = isDueToday || isDueTomorrow || isDueInTwoDays || isOverdue;
+  // Solo se activa la alerta para pagos con fechas futuras que estén a 2 días o menos de la fecha de pago
+  const isAlertActive = diffDays <= reminderDaysBefore;
 
   let label = '';
   let badgeClass = '';
 
-  if (isOverdue) {
-    label = `Vencido hace ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'día' : 'días'}`;
-    badgeClass = 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 animate-pulse';
-  } else if (isDueToday) {
+  if (isDueToday) {
     label = '🚨 Pago programado para HOY';
     badgeClass = 'bg-rose-500 text-white font-black shadow-sm shadow-rose-500/20';
   } else if (isDueTomorrow) {
@@ -839,7 +852,7 @@ export function getFutureExpenseAlertStatus(dateStr: string, reminderDaysBefore:
     isDueToday,
     isDueTomorrow,
     isDueInTwoDays,
-    isOverdue,
+    isOverdue: false,
     label,
     badgeClass,
   };

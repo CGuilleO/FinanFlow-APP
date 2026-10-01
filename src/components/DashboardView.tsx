@@ -267,14 +267,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     })
     .filter((c) => c.pct >= settings.budgetAlertThreshold);
 
-  // Scheduled Future Expenses (Gastos con fecha futura que están a 2 días de pago o en ventana de aviso)
+  // Scheduled Future Expenses (SOLO pagos con fechas a futuro dentro de la ventana de aviso de 2 días)
   const scheduledFutureExpenses = useMemo(() => {
     return transactions
       .filter((t) => {
         if (t.type !== 'expense' || t.isPaid) return false;
         const diffDays = getDaysUntil(t.date);
-        // Show if within 2 days (diffDays <= 2), today (0), tomorrow (1), or overdue (< 0)
-        return diffDays <= (t.reminderDaysBefore || 2);
+        // Exclusivamente fechas a futuro o hoy (diffDays >= 0) y dentro de la ventana de 2 días
+        return diffDays >= 0 && diffDays <= (t.reminderDaysBefore || 2);
       })
       .map((t) => {
         const status = getFutureExpenseAlertStatus(t.date, t.reminderDaysBefore || 2, t.isPaid);
@@ -283,6 +283,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           status,
         };
       })
+      .filter((item) => item.status.isAlertActive && item.status.diffDays >= 0)
       .sort((a, b) => a.status.diffDays - b.status.diffDays);
   }, [transactions]);
 
@@ -295,13 +296,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return ids;
   }, [transactions]);
 
-  // Upcoming bills due in next 5 days or overdue (excluding ones already shown via scheduledFutureExpenses)
+  // Upcoming bills due in next 5 days (excluding ones already shown via scheduledFutureExpenses, strictly future/due today)
   const upcomingBills = useMemo(() => {
     return bills.filter((b) => {
       if (b.status === 'paid') return false;
       if (linkedBillIds.has(b.id) || b.isScheduledExpenseReminder) return false;
       const diffDays = Math.ceil((new Date(b.dueDate).getTime() - today.getTime()) / (1000 * 3600 * 24));
-      return diffDays <= (b.reminderDaysBefore || 5);
+      return diffDays >= 0 && diffDays <= (b.reminderDaysBefore || 5);
     });
   }, [bills, linkedBillIds, today]);
 

@@ -646,17 +646,17 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         <span>{isTransfer ? `${acc?.name} ➔ ${toAcc?.name}` : acc?.name}</span>
                       </div>
 
-                      {/* Scheduled Future Expense Notice (Aviso 2 días antes de la fecha de pago) */}
+                      {/* Scheduled Future Expense Notice (SOLO pagos con fechas a futuro) */}
                       {tx.type === 'expense' && (() => {
                         const status = getFutureExpenseAlertStatus(tx.date, tx.reminderDaysBefore || 2, tx.isPaid);
-                        if (!status.isFuture && !status.isOverdue) return null;
+                        if (!status.isFuture || !status.label) return null;
                         return (
                           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${status.badgeClass}`}>
                               <Bell className="w-3 h-3" />
                               {status.label}
                             </span>
-                            {status.isAlertActive && !status.isDueToday && !status.isOverdue && (
+                            {status.isAlertActive && (
                               <span className="text-[10px] font-medium text-amber-700 dark:text-amber-300">
                                 (Alerta de pago programada para el {formatDate(tx.date)})
                               </span>
