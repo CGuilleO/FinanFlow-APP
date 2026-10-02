@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus, Check, X, Tag, Calendar, Layers, CreditCard, Repeat, ArrowRightLeft,
-  Sparkles, Camera, Mic, MessageSquare, HandCoins, Bell, Percent, Info, AlertCircle,
+  Sparkles, Camera, Mic, MessageSquare, HandCoins, Bell, BellRing, Percent, Info, AlertCircle,
   Upload, FileText, FileCheck, Eye, Trash2, Lightbulb, CheckCircle2, ChevronDown, Download
 } from 'lucide-react';
 import { Account, Category, Transaction, TransactionType, UserSettings, LoanDetails } from '../../types';
@@ -88,9 +88,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   });
   const [lenderOrBorrower, setLenderOrBorrower] = useState('');
 
-  // Future Scheduled Expense Sub-State (2 days before notice)
+  // Future Scheduled Expense Sub-State (Notification is optional, enabled by default)
+  const computeReminderDate = (expenseDateStr: string, daysBefore: number): string => {
+    try {
+      const d = new Date(expenseDateStr + 'T00:00:00');
+      d.setDate(d.getDate() - Math.max(0, daysBefore));
+      return d.toISOString().split('T')[0];
+    } catch {
+      return expenseDateStr;
+    }
+  };
+
   const [enableFutureReminder, setEnableFutureReminder] = useState<boolean>(true);
   const [futureReminderDaysBefore, setFutureReminderDaysBefore] = useState<number>(2);
+  const [customReminderDate, setCustomReminderDate] = useState<string>('');
 
   useEffect(() => {
     if (transactionToEdit) {
@@ -106,8 +117,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setIsRecurring(!!transactionToEdit.isRecurring);
       setRecurringFrequency(transactionToEdit.recurringFrequency || 'monthly');
       setManuallySelectedCategory(true);
-      setEnableFutureReminder(transactionToEdit.isScheduledFutureExpense !== false);
-      setFutureReminderDaysBefore(transactionToEdit.reminderDaysBefore || 2);
+      
+      const isSched = transactionToEdit.isScheduledFutureExpense !== false;
+      const remDays = transactionToEdit.reminderDaysBefore ?? 2;
+      setEnableFutureReminder(isSched);
+      setFutureReminderDaysBefore(remDays);
+      setCustomReminderDate(
+        transactionToEdit.reminderDate || computeReminderDate(transactionToEdit.date, remDays)
+      );
 
       // Restore proof/receipt if exists
       setReceiptImage(transactionToEdit.receiptImage || '');
@@ -139,7 +156,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setType('expense');
       setAmount(0);
       setDescription('');
-      setDate(new Date().toISOString().split('T')[0]);
+      const todayISO = new Date().toISOString().split('T')[0];
+      setDate(todayISO);
       const defaultCat = categories.find((c) => c.type === 'expense');
       setCategoryId(defaultCat?.id || categories[0]?.id || '');
       setAccountId(accounts[0]?.id || '');
@@ -163,6 +181,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setReceiptFileSize(0);
       setEnableFutureReminder(true);
       setFutureReminderDaysBefore(2);
+      setCustomReminderDate(computeReminderDate(todayISO, 2));
     }
     setError(null);
   }, [transactionToEdit, isOpen, categories, accounts]);
@@ -176,15 +195,38 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   // Future Expense & 2-Day Alert Calculations
   const daysUntilDate = useMemo(() => getDaysUntil(date), [date]);
   const isFutureExpense = useMemo(() => type === 'expense' && daysUntilDate > 0, [type, daysUntilDate]);
+  const handleDateChange = (newDate: string) => {
+    setDate(newDate);
+    setCustomReminderDate(computeReminderDate(newDate, futureReminderDaysBefore));
+  };
+
+  const handleCustomReminderDateChange = (newReminderDate: string) => {
+    setCustomReminderDate(newReminderDate);
+    try {
+      const expD = new Date(date + 'T00:00:00');
+      const remD = new Date(newReminderDate + 'T00:00:00');
+      const diff = Math.round((expD.getTime() - remD.getTime()) / (1000 * 60 * 60 * 24));
+      setFutureReminderDaysBefore(Math.max(0, diff));
+    } catch {}
+  };
+
+  const handlePresetSelect = (days: number) => {
+    setFutureReminderDaysBefore(days);
+    setCustomReminderDate(computeReminderDate(date, days));
+  };
+
   const alertDatePreview = useMemo(() => {
     try {
+      if (customReminderDate) {
+        return formatDate(customReminderDate);
+      }
       const d = new Date(date + 'T00:00:00');
-      d.setDate(d.getDate() - (futureReminderDaysBefore || 2));
+      d.setDate(d.getDate() - (futureReminderDaysBefore ?? 2));
       return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
     } catch {
       return '2 días antes';
     }
-  }, [date, futureReminderDaysBefore]);
+  }, [date, futureReminderDaysBefore, customReminderDate]);
 
   // Historical tags used in all transactions (sorted by frequency)
   const historicalTags = useMemo(() => {
@@ -596,7 +638,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             categoryId: type === 'transfer' ? 'cat-transfer' : categoryId,
             accountId,
             reminderDaysBefore: futureReminderDaysBefore,
-            notes: `Alerta automática ${futureReminderDaysBefore} días antes de la fecha de pago (${formatDate(date)}).`,
+            reminderDate: customReminderDate,
+            notes: `Alerta automática configurada para el ${formatDate(customReminderDate || date)} (${futureReminderDaysBefore} días antes).`,
           });
         } else {
           const newBill = addBillReminder({
@@ -608,7 +651,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             isRecurring: isRecurring,
             frequency: isRecurring ? recurringFrequency : 'monthly',
             reminderDaysBefore: futureReminderDaysBefore,
-            notes: `Alerta automática ${futureReminderDaysBefore} días antes de la fecha de pago (${formatDate(date)}).`,
+            reminderDate: customReminderDate,
+            notes: `Alerta automática configurada para el ${formatDate(customReminderDate || date)} (${futureReminderDaysBefore} días antes).`,
             isScheduledExpenseReminder: true,
             scheduledTransactionId: transactionToEdit.id,
           });
@@ -636,6 +680,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         isLoanIncome: false,
         isScheduledFutureExpense: isFutureExpense && enableFutureReminder,
         reminderDaysBefore: isFutureExpense && enableFutureReminder ? futureReminderDaysBefore : undefined,
+        reminderDate: isFutureExpense && enableFutureReminder ? customReminderDate : undefined,
         linkedBillReminderId: linkedBillId,
         ...receiptPayload,
       });
@@ -651,7 +696,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           isRecurring: isRecurring,
           frequency: isRecurring ? recurringFrequency : 'monthly',
           reminderDaysBefore: futureReminderDaysBefore,
-          notes: `Alerta automática ${futureReminderDaysBefore} días antes de la fecha de pago (${formatDate(date)}).`,
+          reminderDate: customReminderDate,
+          notes: `Alerta automática configurada para el ${formatDate(customReminderDate || date)} (${futureReminderDaysBefore} días antes).`,
           isScheduledExpenseReminder: true,
         });
         linkedBillId = newBill.id;
@@ -665,7 +711,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         categoryId: type === 'transfer' ? 'cat-transfer' : categoryId,
         accountId,
         toAccountId: type === 'transfer' ? toAccountId : undefined,
-        tags: isFutureExpense ? (tags.includes('programado') ? tags : [...tags, 'programado']) : tags,
+        tags: isFutureExpense && enableFutureReminder ? (tags.includes('programado') ? tags : [...tags, 'programado']) : tags,
         notes: notes.trim(),
         isRecurring,
         recurringFrequency: isRecurring ? recurringFrequency : undefined,
@@ -673,6 +719,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         isLoanIncome: false,
         isScheduledFutureExpense: isFutureExpense && enableFutureReminder,
         reminderDaysBefore: isFutureExpense && enableFutureReminder ? futureReminderDaysBefore : undefined,
+        reminderDate: isFutureExpense && enableFutureReminder ? customReminderDate : undefined,
         linkedBillReminderId: linkedBillId,
         ...receiptPayload,
       });
@@ -683,8 +730,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         });
       }
 
-      // If the future expense date is within 2 days right now, show browser notification
-      if (isFutureExpense && enableFutureReminder && daysUntilDate <= futureReminderDaysBefore) {
+      // If the future expense alert date is reached right now, show browser notification
+      const todayISO = new Date().toISOString().split('T')[0];
+      const isDueNow = customReminderDate ? todayISO >= customReminderDate : daysUntilDate <= futureReminderDaysBefore;
+      if (isFutureExpense && enableFutureReminder && isDueNow) {
         sendBrowserNotification(
           `FinanFlow: Aviso de Pago en ${daysUntilDate === 0 ? 'hoy' : daysUntilDate === 1 ? 'mañana' : `${daysUntilDate} días`}`,
           `Gasto programado "${description.trim()}" por ${formatCurrency(amount, settings)} vence el ${formatDate(date)}.`
@@ -1147,60 +1196,144 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <input
                 type="date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-900 dark:text-white"
               />
             </div>
           </div>
 
-          {/* Future Expense 2-Day Notice Badge & Option */}
+          {/* Future Expense Optional Notification & Reminder Section */}
           {isFutureExpense && (
-            <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200 space-y-2.5 animate-in fade-in slide-in-from-top-1 shadow-sm">
+            <div className="p-3.5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200 space-y-3 animate-in fade-in slide-in-from-top-1 shadow-sm">
               <div className="flex items-start gap-2.5">
-                <div className="p-2 rounded-xl bg-amber-500 text-white shadow-sm mt-0.5 shrink-0">
+                <div
+                  className={`p-2 rounded-xl text-white shadow-sm mt-0.5 shrink-0 transition-colors ${
+                    enableFutureReminder ? 'bg-amber-500' : 'bg-slate-400 dark:bg-slate-600'
+                  }`}
+                >
                   <Bell className="w-4 h-4" />
                 </div>
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center justify-between flex-wrap gap-1.5">
                     <span className="text-xs font-bold flex items-center gap-1.5 text-amber-950 dark:text-amber-100">
-                      📅 Gasto Programado: Pago el {formatDate(date)}
+                      📅 Gasto con Fecha a Futuro: {formatDate(date)}
                     </span>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200">
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
                       Faltan {daysUntilDate} {daysUntilDate === 1 ? 'día' : 'días'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-amber-900 dark:text-amber-300 leading-relaxed">
-                    🔔 <strong>Aviso automático activo:</strong> FinanFlow te mostrará un aviso destacado en tu <strong>Panel de Control</strong> y en <strong>Facturas & Alarmas</strong> exactamente <strong>2 días antes de la fecha de pago ({alertDatePreview})</strong> para que tengas el dinero listo y no olvides realizar el pago.
+                  <p className="text-[11px] text-amber-900/90 dark:text-amber-300 leading-relaxed">
+                    Has programado este gasto para una fecha posterior. Puedes decidir si deseas programar una notificación y fecha de aviso previo.
                   </p>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-amber-200/80 dark:border-amber-800/80 flex items-center justify-between flex-wrap gap-2">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={enableFutureReminder}
-                    onChange={(e) => setEnableFutureReminder(e.target.checked)}
-                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-amber-400"
-                  />
-                  <span className="text-xs font-semibold text-amber-950 dark:text-amber-100">
-                    Activar recordatorio y alarma de pago
-                  </span>
-                </label>
+              {/* Toggle Switch: Optional, Enabled by default */}
+              <div className="pt-2 border-t border-amber-200/80 dark:border-amber-800/80 space-y-2.5">
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-amber-200 dark:border-amber-800/60 shadow-xs">
+                  <div className="flex-1 pr-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <BellRing className={`w-3.5 h-3.5 ${enableFutureReminder ? 'text-amber-500' : 'text-slate-400'}`} />
+                        Activar notificación / alarma de pago
+                      </p>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300">
+                        Por defecto
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {enableFutureReminder 
+                        ? 'Recibirás un aviso en tu Panel Principal y Facturas antes de que llegue la fecha de pago.' 
+                        : 'Sin notificación: solo se registrará el gasto sin emitir avisos ni alarmas.'}
+                    </p>
+                  </div>
 
-                {enableFutureReminder && (
-                  <div className="flex items-center gap-1.5 text-xs text-amber-900 dark:text-amber-300 font-medium">
-                    <span>Avisar:</span>
-                    <select
-                      value={futureReminderDaysBefore}
-                      onChange={(e) => setFutureReminderDaysBefore(Number(e.target.value))}
-                      className="px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg text-amber-950 dark:text-amber-100 font-bold focus:ring-1 focus:ring-amber-500 focus:outline-none"
-                    >
-                      <option value={1}>1 día antes</option>
-                      <option value={2}>2 días antes (Recomendado)</option>
-                      <option value={3}>3 días antes</option>
-                      <option value={5}>5 días antes</option>
-                    </select>
+                  {/* Toggle Button */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={enableFutureReminder}
+                    onClick={() => setEnableFutureReminder(!enableFutureReminder)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      enableFutureReminder ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        enableFutureReminder ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Date & Preset configuration when enabled */}
+                {enableFutureReminder ? (
+                  <div className="p-3 rounded-xl bg-amber-100/70 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/80 space-y-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-950 dark:text-amber-100 mb-1 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                          Fecha de notificación / aviso:
+                        </label>
+                        <input
+                          type="date"
+                          value={customReminderDate}
+                          min={new Date().toISOString().split('T')[0]}
+                          max={date}
+                          onChange={(e) => handleCustomReminderDateChange(e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-lg text-slate-900 dark:text-white font-bold focus:ring-1 focus:ring-amber-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="block text-[11px] font-bold text-amber-950 dark:text-amber-100 mb-1">
+                          O elegir aviso rápido:
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {[
+                            { days: 2, label: '2 días antes' },
+                            { days: 1, label: '1 día antes' },
+                            { days: 0, label: 'Mismo día' },
+                            { days: 3, label: '3 días antes' },
+                            { days: 5, label: '5 días antes' },
+                          ].map((p) => {
+                            const isSelected = futureReminderDaysBefore === p.days;
+                            return (
+                              <button
+                                key={`preset-${p.days}`}
+                                type="button"
+                                onClick={() => handlePresetSelect(p.days)}
+                                className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-amber-500 text-white font-black shadow-xs'
+                                    : 'bg-white/90 dark:bg-slate-900/90 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-700/80 hover:bg-amber-100 dark:hover:bg-amber-900/50'
+                                }`}
+                              >
+                                {p.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-amber-900 dark:text-amber-300 pt-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>
+                        🔔 Te notificaremos el <strong>{formatDate(customReminderDate || date)}</strong> (
+                        {futureReminderDaysBefore === 0
+                          ? 'el mismo día del vencimiento'
+                          : `${futureReminderDaysBefore} ${futureReminderDaysBefore === 1 ? 'día' : 'días'} antes`}
+                        ) para que tengas el saldo preparado.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                    <Info className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span>
+                      Sin notificación activa: este gasto se registrará con fecha <strong>{formatDate(date)}</strong>, pero no aparecerá en las alertas de tu panel ni te enviará avisos.
+                    </span>
                   </div>
                 )}
               </div>

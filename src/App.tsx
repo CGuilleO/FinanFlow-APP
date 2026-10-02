@@ -386,28 +386,34 @@ export default function App() {
     setMobileMenuOpen(false);
   };
 
-  // Compute pending bills + future scheduled expenses in 2-day alert window (EXCLUSIVAMENTE FECHAS A FUTURO)
+  // Compute pending bills + future scheduled expenses in alert window (EXCLUSIVAMENTE FECHAS A FUTURO CON NOTIFICACIÓN ACTIVA)
   const pendingAlertsCount = React.useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const pendingBillsCount = bills.filter((b) => b.status === 'pending' && b.dueDate >= todayStr).length;
     const futureExpensesActive = transactions.filter((t) => {
-      if (t.type !== 'expense' || t.isPaid) return false;
+      if (t.type !== 'expense' || t.isPaid || t.isScheduledFutureExpense === false) return false;
       if (!t.date || t.date < todayStr) return false;
       const diff = getDaysUntil(t.date);
-      return diff >= 0 && diff <= (t.reminderDaysBefore || 2);
+      const isDue = t.reminderDate
+        ? todayStr >= t.reminderDate && todayStr <= t.date
+        : diff <= (t.reminderDaysBefore ?? 2);
+      return diff >= 0 && isDue;
     }).length;
     const linkedCount = transactions.filter((t) => t.linkedBillReminderId && t.type === 'expense' && !t.isPaid).length;
     return Math.max(pendingBillsCount, pendingBillsCount + futureExpensesActive - linkedCount);
   }, [bills, transactions]);
 
-  // Periodic and on-load check to trigger browser notification for 2-day payment notices (SOLO FECHAS A FUTURO)
+  // Periodic and on-load check to trigger browser notification for payment notices (SOLO FECHAS A FUTURO CON NOTIFICACIÓN ACTIVA)
   React.useEffect(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const activeAlerts = transactions.filter((t) => {
-      if (t.type !== 'expense' || t.isPaid) return false;
+      if (t.type !== 'expense' || t.isPaid || t.isScheduledFutureExpense === false) return false;
       if (!t.date || t.date < todayStr) return false;
       const diff = getDaysUntil(t.date);
-      return diff >= 0 && diff <= (t.reminderDaysBefore || 2);
+      const isDue = t.reminderDate
+        ? todayStr >= t.reminderDate && todayStr <= t.date
+        : diff <= (t.reminderDaysBefore ?? 2);
+      return diff >= 0 && isDue;
     });
 
     if (activeAlerts.length > 0) {

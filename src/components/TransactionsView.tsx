@@ -648,8 +648,25 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
                       {/* Scheduled Future Expense Notice (SOLO pagos con fechas a futuro) */}
                       {tx.type === 'expense' && (() => {
-                        const status = getFutureExpenseAlertStatus(tx.date, tx.reminderDaysBefore || 2, tx.isPaid);
-                        if (!status.isFuture || !status.label) return null;
+                        const status = getFutureExpenseAlertStatus(
+                          tx.date,
+                          tx.reminderDaysBefore ?? 2,
+                          tx.isPaid,
+                          tx.isScheduledFutureExpense !== false,
+                          tx.reminderDate
+                        );
+                        if (!status.isFuture) return null;
+                        if (tx.isScheduledFutureExpense === false) {
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                <Calendar className="w-3 h-3 text-slate-400" />
+                                Pago futuro (Sin notificación)
+                              </span>
+                            </div>
+                          );
+                        }
+                        if (!status.label) return null;
                         return (
                           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${status.badgeClass}`}>

@@ -267,26 +267,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     })
     .filter((c) => c.pct >= settings.budgetAlertThreshold);
 
-  // Scheduled Future Expenses (SOLO pagos con fechas a futuro dentro de la ventana de aviso de 2 días)
+  // Scheduled Future Expenses (SOLO pagos con fechas a futuro dentro de la ventana de aviso y con notificación activa)
   const scheduledFutureExpenses = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     return transactions
       .filter((t) => {
         if (t.type !== 'expense' || t.isPaid) return false;
+        // Si el usuario decidió NO poner notificación (opcional), no mostrarlo en alertas
+        if (t.isScheduledFutureExpense === false) return false;
         // La fecha debe ser estrictamente hoy o futura (NUNCA en el pasado)
         if (!t.date || t.date < todayStr) return false;
         const diffDays = getDaysUntil(t.date);
-        // Exclusivamente fechas a futuro o hoy (diffDays >= 0) y dentro de la ventana de 2 días
-        return diffDays >= 0 && diffDays <= (t.reminderDaysBefore || 2);
+        const isReminderDue = t.reminderDate
+          ? todayStr >= t.reminderDate && todayStr <= t.date
+          : diffDays <= (t.reminderDaysBefore ?? 2);
+        return diffDays >= 0 && isReminderDue;
       })
       .map((t) => {
-        const status = getFutureExpenseAlertStatus(t.date, t.reminderDaysBefore || 2, t.isPaid);
+        const status = getFutureExpenseAlertStatus(
+          t.date,
+          t.reminderDaysBefore ?? 2,
+          t.isPaid,
+          t.isScheduledFutureExpense !== false,
+          t.reminderDate
+        );
         return {
           tx: t,
           status,
         };
       })
-      .filter((item) => item.status.isAlertActive && item.status.diffDays >= 0 && item.tx.date >= todayStr)
+      .filter((item) => item.status.isAlertActive && item.status.diffDays >= 0 && item.tx.date >= todayStr && item.tx.isScheduledFutureExpense !== false)
       .sort((a, b) => a.status.diffDays - b.status.diffDays);
   }, [transactions]);
 
@@ -448,10 +458,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           ))}
 
-          {/* Scheduled Future Expenses (Aviso de Pago 2 Días Antes - EXCLUSIVAMENTE FECHAS A FUTURO) */}
+          {/* Scheduled Future Expenses (Aviso de Pago - EXCLUSIVAMENTE FECHAS A FUTURO Y NOTIFICACIÓN ACTIVA) */}
           {scheduledFutureExpenses.map(({ tx, status }) => {
             const todayStr = new Date().toISOString().split('T')[0];
-            if (!status.isAlertActive || status.diffDays < 0 || !tx.date || tx.date < todayStr) {
+            if (!status.isAlertActive || status.diffDays < 0 || !tx.date || tx.date < todayStr || tx.isScheduledFutureExpense === false) {
               return null;
             }
             const cat = categoryMap.get(tx.categoryId);

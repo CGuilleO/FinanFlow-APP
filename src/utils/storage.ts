@@ -786,8 +786,14 @@ export interface FutureExpenseAlert {
   badgeClass: string;
 }
 
-export function getFutureExpenseAlertStatus(dateStr: string, reminderDaysBefore: number = 2, isPaid: boolean = false): FutureExpenseAlert {
-  if (isPaid) {
+export function getFutureExpenseAlertStatus(
+  dateStr: string,
+  reminderDaysBefore: number = 2,
+  isPaid: boolean = false,
+  isScheduled: boolean = true,
+  reminderDate?: string
+): FutureExpenseAlert {
+  if (isPaid || isScheduled === false) {
     return {
       isFuture: false,
       diffDays: 0,
@@ -796,8 +802,8 @@ export function getFutureExpenseAlertStatus(dateStr: string, reminderDaysBefore:
       isDueTomorrow: false,
       isDueInTwoDays: false,
       isOverdue: false,
-      label: 'Pagado',
-      badgeClass: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+      label: isPaid ? 'Pagado' : '',
+      badgeClass: isPaid ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800' : '',
     };
   }
 
@@ -823,8 +829,12 @@ export function getFutureExpenseAlertStatus(dateStr: string, reminderDaysBefore:
   const isDueTomorrow = diffDays === 1;
   const isDueInTwoDays = diffDays === 2;
   const isFuture = diffDays > 0;
-  // Solo se activa la alerta para pagos con fechas futuras que estén a 2 días o menos de la fecha de pago
-  const isAlertActive = diffDays <= reminderDaysBefore;
+  
+  // Se activa la alerta si hoy ya alcanzó la fecha de recordatorio personalizada,
+  // o si faltan igual o menos días que reminderDaysBefore
+  const isAlertActive = reminderDate
+    ? todayStr >= reminderDate && todayStr <= dateStr
+    : diffDays <= reminderDaysBefore;
 
   let label = '';
   let badgeClass = '';
@@ -838,7 +848,7 @@ export function getFutureExpenseAlertStatus(dateStr: string, reminderDaysBefore:
   } else if (isDueInTwoDays) {
     label = '🔔 Aviso: Pago en 2 días';
     badgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold';
-  } else if (diffDays <= reminderDaysBefore) {
+  } else if (isAlertActive) {
     label = `🔔 Aviso: Pago en ${diffDays} días`;
     badgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-bold';
   } else {
