@@ -14,6 +14,7 @@ import {
   Tag,
   CreditCard,
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   Sparkles,
   Edit3,
@@ -29,8 +30,9 @@ import {
   SlidersHorizontal,
   ArrowUpDown
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../../types';
-import { deleteTransaction, formatCurrency, formatDate } from '../../utils/storage';
+import { deleteTransaction, updateTransaction, updateBillReminder, formatCurrency, formatDate } from '../../utils/storage';
 import { IconRenderer } from '../IconRenderer';
 
 export type DrilldownType =
@@ -1673,6 +1675,36 @@ export const DashboardDrilldownModal: React.FC<DashboardDrilldownModalProps> = (
                     <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs">
                       <span className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Notas / Detalle</span>
                       <p className="text-slate-700 dark:text-slate-300">{tx.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Unapproved Status Banner */}
+                  {tx.type === 'expense' && tx.isPaid === false && (
+                    <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-950 dark:text-rose-200">
+                      <div className="flex items-center gap-2.5">
+                        <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <div>
+                          <p className="font-bold">🔴 Pago Automático • No Pagado (Pendiente de Aprobación)</p>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                            Este gasto fue registrado en automático pero requiere tu aprobación para marcarse como pagado.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          updateTransaction(tx.id, { isPaid: true });
+                          if (tx.linkedBillReminderId) {
+                            updateBillReminder(tx.linkedBillReminderId, { status: 'paid' });
+                          }
+                          confetti({ particleCount: 40, spread: 60, origin: { y: 0.7 } });
+                          if (onRefreshData) onRefreshData();
+                          onClose();
+                        }}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Aprobar Pago</span>
+                      </button>
                     </div>
                   )}
 

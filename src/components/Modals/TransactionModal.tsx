@@ -681,6 +681,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         isScheduledFutureExpense: isFutureExpense && enableFutureReminder,
         reminderDaysBefore: isFutureExpense && enableFutureReminder ? futureReminderDaysBefore : undefined,
         reminderDate: isFutureExpense && enableFutureReminder ? customReminderDate : undefined,
+        isPaid: isFutureExpense ? (transactionToEdit.isPaid ?? false) : (transactionToEdit.isPaid ?? true),
+        isAutomaticPayment: isFutureExpense,
         linkedBillReminderId: linkedBillId,
         ...receiptPayload,
       });
@@ -720,6 +722,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         isScheduledFutureExpense: isFutureExpense && enableFutureReminder,
         reminderDaysBefore: isFutureExpense && enableFutureReminder ? futureReminderDaysBefore : undefined,
         reminderDate: isFutureExpense && enableFutureReminder ? customReminderDate : undefined,
+        isPaid: isFutureExpense ? false : true,
+        isAutomaticPayment: isFutureExpense,
         linkedBillReminderId: linkedBillId,
         ...receiptPayload,
       });
@@ -1329,11 +1333,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                    <Info className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span>
-                      Sin notificación activa: este gasto se registrará con fecha <strong>{formatDate(date)}</strong>, pero no aparecerá en las alertas de tu panel ni te enviará avisos.
-                    </span>
+                  <div className="p-3 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-[11px] text-rose-900 dark:text-rose-200 flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-bold">
+                        🔴 Pago automático sin avisos ni alarmas:
+                      </p>
+                      <p className="text-slate-600 dark:text-slate-300">
+                        Este gasto se registrará para el <strong>{formatDate(date)}</strong>. No emitirá avisos en el Panel ni Facturas, pero <strong>quedará marcado en rojo como No Pagado (Pendiente de Aprobación)</strong> en tu lista de movimientos hasta que des clic en <strong>Aprobar Pago</strong>.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

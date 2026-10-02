@@ -19,6 +19,7 @@ import {
   Upload,
   FileSpreadsheet,
   AlertTriangle,
+  AlertCircle,
   HandCoins,
   Bell,
   Clock,
@@ -28,13 +29,17 @@ import {
   Cloud,
   ShieldCheck,
   CheckCircle2,
+  Check,
   FileCheck,
   FileText,
   BarChart3,
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { Account, Category, Transaction, UserSettings } from '../types';
 import {
   deleteTransaction,
+  updateTransaction,
+  updateBillReminder,
   formatCurrency,
   formatDate,
   clearOnlyTransactions,
@@ -76,7 +81,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   onRefresh,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState<'all' | 'expense' | 'income' | 'transfer' | 'scheduled'>('all');
+  const [selectedType, setSelectedType] = useState<'all' | 'expense' | 'income' | 'transfer' | 'scheduled' | 'unapproved'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>(initialTagFilter || 'all');
@@ -85,6 +90,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
   const [customEndDate, setCustomEndDate] = useState('');
   const [pageSize, setPageSize] = useState<number | 'all'>(50);
   const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Unapproved automatic payments count
+  const pendingApprovalCount = useMemo(() => {
+    return transactions.filter((t) => t.type === 'expense' && t.isPaid === false).length;
+  }, [transactions]);
 
   // Modals
   const [previewReceipt, setPreviewReceipt] = useState<{ url: string; name?: string; type?: string } | null>(null);
@@ -95,6 +105,29 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+
+  const handleApprovePayment = async (tx: Transaction) => {
+    updateTransaction(tx.id, { isPaid: true });
+    if (tx.linkedBillReminderId) {
+      updateBillReminder(tx.linkedBillReminderId, { status: 'paid' });
+    }
+    confetti({
+      particleCount: 35,
+      spread: 60,
+      origin: { y: 0.7 },
+    });
+    await syncCurrentDataToCloud();
+    onRefresh();
+  };
+
+  const handleUnapprovePayment = async (tx: Transaction) => {
+    updateTransaction(tx.id, { isPaid: false });
+    if (tx.linkedBillReminderId) {
+      updateBillReminder(tx.linkedBillReminderId, { status: 'pending' });
+    }
+    await syncCurrentDataToCloud();
+    onRefresh();
+  };
 
   const handleClearAllTransactions = async () => {
     setIsClearing(true);
@@ -156,6 +189,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
         if (t.type !== 'expense') return false;
         const diff = getDaysUntil(t.date);
         if (diff <= 0 && !t.isScheduledFutureExpense) return false;
+      } else if (selectedType === 'unapproved') {
+        if (t.type !== 'expense' || t.isPaid !== false) return false;
       } else if (selectedType !== 'all' && t.type !== selectedType) {
         return false;
       }
@@ -428,27 +463,37 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
 
           {/* Type Filter Pills */}
           <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex-wrap gap-0.5">
-            {(['all', 'expense', 'income', 'transfer', 'scheduled'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setSelectedType(t)}
-                className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg capitalize transition-all whitespace-nowrap text-center ${
-                  selectedType === t
-                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm font-bold'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900'
-                }`}
-              >
-                {t === 'all'
-                  ? 'Todos'
-                  : t === 'expense'
-                  ? 'Gastos'
-                  : t === 'income'
-                  ? 'Ingresos'
-                  : t === 'transfer'
-                  ? 'Transf.'
-                  : '⏳ Programados'}
-              </button>
-            ))}
+            {(['all', 'expense', 'income', 'transfer', 'scheduled', 'unapproved'] as const).map((t) => {
+              if (t === 'unapproved' && pendingApprovalCount === 0) return null;
+              const isSelected = selectedType === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setSelectedType(t)}
+                  className={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-lg capitalize transition-all whitespace-nowrap text-center ${
+                    isSelected
+                      ? t === 'unapproved'
+                        ? 'bg-rose-600 text-white shadow-sm font-black'
+                        : 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm font-bold'
+                      : t === 'unapproved'
+                      ? 'text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/60 font-bold'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  {t === 'all'
+                    ? 'Todos'
+                    : t === 'expense'
+                    ? 'Gastos'
+                    : t === 'income'
+                    ? 'Ingresos'
+                    : t === 'transfer'
+                    ? 'Transf.'
+                    : t === 'scheduled'
+                    ? '⏳ Programados'
+                    : `🔴 Por Aprobar (${pendingApprovalCount})`}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -603,16 +648,22 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
               const toAcc = tx.toAccountId ? accountMap.get(tx.toAccountId) : null;
               const isIncome = tx.type === 'income';
               const isTransfer = tx.type === 'transfer';
+              const isUnapproved = tx.type === 'expense' && tx.isPaid === false;
+              const isApproved = tx.type === 'expense' && tx.isPaid === true && (tx.isAutomaticPayment || tx.isScheduledFutureExpense || tx.tags?.includes('programado'));
 
               return (
                 <div
                   key={tx.id}
-                  className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors group"
+                  className={`p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group ${
+                    isUnapproved
+                      ? 'border-l-4 border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-50/80 dark:hover:bg-rose-950/30'
+                      : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/40'
+                  }`}
                 >
                   <div className="flex items-start sm:items-center gap-3.5 min-w-0">
                     <div
                       className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 text-white shadow-sm"
-                      style={{ backgroundColor: cat?.color || '#64748B' }}
+                      style={{ backgroundColor: isUnapproved ? '#E11D48' : (cat?.color || '#64748B') }}
                     >
                       <IconRenderer name={cat?.icon || 'DollarSign'} className="w-5 h-5" />
                     </div>
@@ -646,8 +697,42 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                         <span>{isTransfer ? `${acc?.name} ➔ ${toAcc?.name}` : acc?.name}</span>
                       </div>
 
-                      {/* Scheduled Future Expense Notice (SOLO pagos con fechas a futuro) */}
+                      {/* Scheduled Future Expense Notice / Unapproved status */}
                       {tx.type === 'expense' && (() => {
+                        if (isUnapproved) {
+                          return (
+                            <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-100 dark:bg-rose-900/80 text-rose-800 dark:text-rose-200 border border-rose-300 dark:border-rose-800 shadow-xs">
+                                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                                🔴 Pago Automático • No Pagado (Pendiente de Aprobación)
+                              </span>
+                              {tx.isScheduledFutureExpense === false && (
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                  (Sin alarmas previas)
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        if (isApproved) {
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUnapprovePayment(tx);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-200 cursor-pointer transition-colors"
+                                title="Clic si deseas volver a marcarlo como pendiente de aprobación"
+                              >
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                <span>✓ Pago Aprobado • Pagado</span>
+                              </button>
+                            </div>
+                          );
+                        }
+
                         const status = getFutureExpenseAlertStatus(
                           tx.date,
                           tx.reminderDaysBefore ?? 2,
@@ -655,18 +740,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                           tx.isScheduledFutureExpense !== false,
                           tx.reminderDate
                         );
-                        if (!status.isFuture) return null;
-                        if (tx.isScheduledFutureExpense === false) {
-                          return (
-                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                                <Calendar className="w-3 h-3 text-slate-400" />
-                                Pago futuro (Sin notificación)
-                              </span>
-                            </div>
-                          );
-                        }
-                        if (!status.label) return null;
+                        if (!status.isFuture || !status.label) return null;
                         return (
                           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${status.badgeClass}`}>
@@ -766,7 +840,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({
                       {formatCurrency(tx.amount, settings)}
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {isUnapproved && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApprovePayment(tx);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                          title="Aprobar y marcar este pago automático como pagado"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Aprobar Pago</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => onEditTransaction(tx)}
                         title="Editar movimiento"

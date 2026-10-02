@@ -1,5 +1,5 @@
 // FinanFlow Service Worker for PWA Standalone & WebAPK & Share Target Caching
-const CACHE_NAME = 'finanflow-pwa-v9';
+const CACHE_NAME = 'finanflow-pwa-v10';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',

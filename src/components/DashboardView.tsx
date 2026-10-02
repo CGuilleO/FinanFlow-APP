@@ -31,6 +31,7 @@ import {
   ReceiptText,
   CheckCircle2,
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { Account, BillReminder, Category, Transaction, UserSettings } from '../types';
 import {
   formatCurrency,
@@ -1134,6 +1135,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               const acc = accountMap.get(tx.accountId);
               const isIncome = tx.type === 'income';
               const isTransfer = tx.type === 'transfer';
+              const isUnapproved = tx.type === 'expense' && tx.isPaid === false;
+              const isApproved = tx.type === 'expense' && tx.isPaid === true && (tx.isAutomaticPayment || tx.isScheduledFutureExpense || tx.tags?.includes('programado'));
 
               return (
                 <div
@@ -1142,12 +1145,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     setSelectedTxForDetail(tx);
                     setDrilldownType('transaction_detail');
                   }}
-                  className="py-3 flex items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/60 rounded-2xl px-3 transition-all cursor-pointer group"
+                  className={`py-3 flex items-center justify-between gap-4 rounded-2xl px-3 transition-all cursor-pointer group ${
+                    isUnapproved
+                      ? 'border-l-4 border-l-rose-500 bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-50/80 dark:hover:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 my-1'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                  }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
                       className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-white shadow-sm group-hover:scale-105 transition-transform cursor-pointer"
-                      style={{ backgroundColor: cat?.color || '#64748B' }}
+                      style={{ backgroundColor: isUnapproved ? '#E11D48' : (cat?.color || '#64748B') }}
                       title={`Ver categoría: ${cat?.name || 'General'}`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1157,10 +1164,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <IconRenderer name={cat?.icon || 'DollarSign'} className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                           {tx.description}
                         </h4>
+                        {isUnapproved ? (
+                          <span className="px-2 py-0.5 text-[9px] font-black rounded-md uppercase bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                            🔴 No Pagado (Por Aprobar)
+                          </span>
+                        ) : isApproved ? (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            Pagado
+                          </span>
+                        ) : null}
                         {tx.source && tx.source !== 'manual' && (
                           <span className="px-1.5 py-0.5 text-[9px] font-bold rounded uppercase bg-slate-100 dark:bg-slate-800 text-slate-500">
                             {tx.source}
@@ -1210,7 +1228,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="text-right flex-shrink-0 flex items-center gap-3">
+                  <div className="text-right flex-shrink-0 flex items-center gap-2 sm:gap-3">
+                    {isUnapproved && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateTransaction(tx.id, { isPaid: true });
+                          if (tx.linkedBillReminderId) {
+                            updateBillReminder(tx.linkedBillReminderId, { status: 'paid' });
+                          }
+                          confetti({ particleCount: 30, spread: 60, origin: { y: 0.7 } });
+                          if (onRefreshData) onRefreshData();
+                        }}
+                        className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center gap-1 cursor-pointer transition-all active:scale-95 whitespace-nowrap"
+                        title="Aprobar este pago automático"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Aprobar</span>
+                      </button>
+                    )}
                     <div>
                       <div
                         className={`text-sm font-bold ${

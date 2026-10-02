@@ -73,7 +73,8 @@ export interface Transaction {
   reminderDaysBefore?: number; // Días antes para mostrar el aviso (por defecto 2 días)
   reminderDate?: string; // Fecha exacta configurada para recibir la notificación
   linkedBillReminderId?: string; // ID del recordatorio automático de factura o alarma
-  isPaid?: boolean; // Estado de pago para gastos futuros programados
+  isPaid?: boolean; // Estado de pago para gastos futuros (false = No Pagado / Pendiente de Aprobación, true = Pagado / Aprobado)
+  isAutomaticPayment?: boolean; // Registrado como pago automático programado
 }
 
 export interface LoanPaymentRecord {
